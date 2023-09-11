@@ -38,3 +38,9 @@ api.post("/client/process-pairs", (req, res) => {
   const { pairs } = req.body;
   res.send(`Downloading PDB file for ${id}`);
 });
+
+await operations.processPairs([
+  [1, 2],
+  [3, 4],
+  [5, 6],
+]);
