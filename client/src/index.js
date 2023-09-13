@@ -13,6 +13,8 @@ api.use(cors({ origin: "*" }));
 
 api.listen(port, () => {
   console.log(`Client is running on port ${port}`);
+  const pairs = new Array(10000).fill(0).map((_, i) => [i, i + 1]);
+  operations.processPairs(pairs);
 });
 
 api.get("/client/state", (req, res) => {
@@ -38,9 +40,3 @@ api.post("/client/process-pairs", (req, res) => {
   const { pairs } = req.body;
   res.send(`Downloading PDB file for ${id}`);
 });
-
-await operations.processPairs([
-  [1, 2],
-  [3, 4],
-  [5, 6],
-]);
