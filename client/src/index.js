@@ -1,42 +1,56 @@
 import express from "express";
+import axios from "axios";
 import cors from "cors";
 import operations from "./operations.js";
 
-export default global = {
-  isBusy: false,
+const serverUrl = "http://localhost:1999";
+
+const global = {
+  name: null,
+  state: {
+    isActive: false,
+    queue: [],
+  }
 };
 
 const port = 2000;
-const api = express();
+const client = express();
 
-api.use(cors({ origin: "*" }));
+client.use(cors({ origin: "*" }));
+client.use(express.json());
 
-api.listen(port, () => {
-  console.log(`Client is running on port ${port}`);
-  const pairs = new Array(10000).fill(0).map((_, i) => [i, i + 1]);
-  operations.processPairs(pairs);
+client.get("/state", (req, res) => {
+  try{
+    res.send(global.state);
+  } catch(err){
+    console.log('/state error: ', err.message);
+  }
 });
 
-api.get("/client/state", (req, res) => {
-  res.send(global);
+client.post("/run", (req, res) => {
+  try{
+    console.log(req.body)
+    res.send(200);
+  } catch(err){
+    console.log('/run error: ', err.message);
+  }
 });
 
-api.post("/client/download-pdb", (req, res) => {
-  const { id } = req.body;
-  res.send(`Downloading PDB file for ${id}`);
+client.listen(port, async () => {
+  try {
+    console.log(`Client is running on port ${port}`);
+    const {
+      status,
+      data
+    } = await axios.post(`${serverUrl}/join`, {
+      state: global.state
+    });
+    if(status === 200) {
+      global.name = data.name;
+      global.state = data.state;
+    }
+  } catch (err) {
+    console.log('client listen error: ', err.message);
+  }
 });
 
-api.post("/client/download-pdbs", (req, res) => {
-  const { id1, id2 } = req.body;
-  res.send(`Downloading PDB file for ${id}`);
-});
-
-api.post("/client/process-pair", (req, res) => {
-  const { id1, id2 } = req.body;
-  res.send(`Downloading PDB file for ${id}`);
-});
-
-api.post("/client/process-pairs", (req, res) => {
-  const { pairs } = req.body;
-  res.send(`Downloading PDB file for ${id}`);
-});

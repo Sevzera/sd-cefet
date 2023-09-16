@@ -3,24 +3,24 @@ const uri =
   "mongodb+srv://sev:262951@sd-cluster.6rzpygc.mongodb.net/?retryWrites=true&w=majority";
 const databaseName = "sd-database";
 
-const db = {
+const database = {
   connection: null,
 };
 
-db.connect = async () => {
-  if (!db.connection) {
+database.connect = async () => {
+  if (!database.connection) {
     await MongoClient.connect(uri).then((client, err) => {
       if (err) console.log(err);
       else {
         console.log("Connected successfully to database");
-        db.connection = client.db(databaseName);
+        database.connection = client.db(databaseName);
       }
     });
   }
 };
-db.connection = await db.connect();
+database.connection = await database.connect();
 
-db.show = async (id1, id2) => {
+database.show = async (id1, id2) => {
   try {
     console.log("show", {
       id1,
@@ -32,7 +32,7 @@ db.show = async (id1, id2) => {
   }
 };
 
-db.index = async (id1, id2) => {
+database.index = async (id1, id2) => {
   try {
     console.log("index", {
       id1,
@@ -44,7 +44,7 @@ db.index = async (id1, id2) => {
   }
 };
 
-db.create = async (id1, id2, data) => {
+database.create = async (id1, id2, data) => {
   try {
     console.log("create", {
       id1,
@@ -57,7 +57,7 @@ db.create = async (id1, id2, data) => {
   }
 };
 
-db.update = async (id1, id2, data) => {
+database.update = async (id1, id2, data) => {
   try {
     console.log("update", {
       id1,
@@ -70,7 +70,7 @@ db.update = async (id1, id2, data) => {
   }
 };
 
-db.delete = async (id1, id2) => {
+database.delete = async (id1, id2) => {
   try {
     console.log("delete", {
       id1,
@@ -82,4 +82,4 @@ db.delete = async (id1, id2) => {
   }
 };
 
-export default db;
+export default database;

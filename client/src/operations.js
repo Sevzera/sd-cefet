@@ -1,34 +1,18 @@
-import { exec } from "child_process";
+import fs from "fs";
 
 const sleep = (s) => {
   return new Promise((resolve) => setTimeout(resolve, s * 1000));
 };
 
-const run = (command) => {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.log(`error: ${error.message}`);
-        reject(error.message);
-      }
-      if (stderr) {
-        console.log(`stderr: ${stderr}`);
-        reject(stderr);
-      }
-      console.log(`stdout: ${stdout}`);
-      resolve(stdout);
-    });
-  });
-};
-
 const operations = {};
 
-operations.downloadPDB = async (id) => {
-  return console.log(`Downloading PDB file for ${id}`);
-};
-
-operations.downloadPDBs = async (ids) => {
-  return console.log(`Downloading PDB files for ${ids}`);
+operations.getIds = () => {
+  try {
+    const ids = fs.readFileSync("./src/ids.txt").toString().split(",");
+    return ids;
+  } catch (err) {
+    console.log(err);
+  }
 };
 
 operations.processPair = async (id1, id2) => {
