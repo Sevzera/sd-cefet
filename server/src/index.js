@@ -6,17 +6,13 @@ import operations from "./operations.js";
 const global = {
   isRunning: false,
   clients: [],
-  proteins: operations.getIds()
 };
 
 async function run () {
   try{
     const { isRunning, clients, proteins } = global;
 
-    const activeClients = clients.filter(
-      (c) => c.state.isActive
-    );
-    const batches = operations.getBatches(proteins, activeClients.length);
+    const activeClients = clients.filter((c) => c.state.isActive);
     
     console.log(batches.length)
   } catch (err) {
@@ -54,6 +50,8 @@ server.post('/join', (req, res) => {
 server.listen(port, async () => {
   try {
     console.log(`Server is running on port ${port}`);
+    const proteinIds = operations.getProteinIds();
+    const proteinIdPairs = await operations.buildProteinIdPairs(proteinIds);
     setInterval(run, 5000);
   } catch (err) {
     console.log('server listen error: ', err.message);

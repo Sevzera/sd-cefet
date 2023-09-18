@@ -2,6 +2,7 @@ import { MongoClient } from "mongodb";
 const uri =
   "mongodb+srv://sev:262951@sd-cluster.6rzpygc.mongodb.net/?retryWrites=true&w=majority";
 const databaseName = "sd-database";
+const collectionName = "results";
 
 const database = {
   connection: null,
@@ -13,12 +14,14 @@ database.connect = async () => {
       if (err) console.log(err);
       else {
         console.log("Connected successfully to database");
-        database.connection = client.db(databaseName);
+        database.connection = client
+          .db(databaseName)
+          .collection(collectionName);
       }
     });
   }
+  return database.connection;
 };
-database.connection = await database.connect();
 
 database.show = async (id1, id2) => {
   try {
@@ -82,4 +85,4 @@ database.delete = async (id1, id2) => {
   }
 };
 
-export default database;
+export default await database.connect();
