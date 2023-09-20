@@ -4,59 +4,61 @@ import database from "./database.js";
 
 const operations = {};
 
-operations.buildProteinIdPairs = async (proteinIds) => {
+operations.setupDatabase = async (proteinIds, resetCollection) => {
   try {
     const startTimer = Date.now();
 
-    console.log("Resetting database...");
-    await database.deleteMany();
-    console.log("Database reset!");
-    console.log("Inserting null matched pairs...");
+    // continue from here
+    const collection = await database.getCollection(index);
+    if (resetCollection) {
+      console.log(`COLL${index} -> Resetting collection...`);
+      await collection.deleteMany();
+      console.log(`COLL${index} -> Collection reset!`);
+    }
+    console.log(`COLL${index} -> Inserting null matched pairs...`);
     const promises = [];
-    for (const [index, id1] of proteinIds.entries()) {
-      const pairs = [];
-      for (let i = index; i < proteinIds.length; i++) {
-        const id2 = proteinIds[i];
+    for (const [i, id1] of proteinIds.entries()) {
+      let pairs = [];
+      for (let j = i; j < proteinIds.length; j++) {
+        const id2 = proteinIds[j];
         pairs.push([id1, id2]);
+        if (pairs.length >= 1000 || j === proteinIds.length - 1) {
+          const insert = async () => {
+            const docs = pairs.map(([id1, id2]) => ({
+              _id: `${id1}-${id2}`,
+              match: null,
+            }));
+            await collection.insertMany(docs);
+            stdout.clearLine(0);
+            stdout.cursorTo(0);
+            stdout.write(
+              `COLL${index} -> PROGRESS: ${Number.parseFloat(
+                (i / proteinIds.length) * 100
+              ).toFixed(2)}%`
+            );
+          };
+          promises.push(insert());
+          pairs = [];
+        }
       }
-
-      const pairObjects = pairs.map(([id1, id2]) => ({
-        _id: `${id1}-${id2}`,
-        // match: null,
-        match: "100%",
-      }));
-
-      const promiseFn = async () => {
-        await database.insertMany(pairObjects);
-        stdout.clearLine(0);
-        stdout.cursorTo(0);
-        stdout.write(
-          `PROGRESS: ${Number.parseFloat(
-            (index / proteinIds.length) * 100
-          ).toFixed(2)}%`
-        );
-      };
-      promises.push(promiseFn());
     }
 
     await Promise.all(promises);
     stdout.clearLine(0);
     stdout.cursorTo(0);
-    console.log("PROGRESS: 100%");
-    const count = await database.countDocuments();
-    console.log(`Inserted ${count} pairs`);
+    console.log(`COLL${index} -> PROGRESS: 100%`);
 
     const endTimer = Date.now();
-    console.log(`Done in ${(endTimer - startTimer) / 1000}s`);
+    console.log(`COLL${index} -> done in ${(endTimer - startTimer) / 1000}s`);
   } catch (err) {
     console.log(err);
   }
 };
 
-operations.getProteinIds = () => {
+operations.getProteinIds = (start, end) => {
   try {
     const ids = fs.readFileSync("./src/ids.txt").toString().split(",");
-    return ids.slice(0, 1000);
+    return ids.slice(start, end);
   } catch (err) {
     console.log(err);
   }

@@ -5,84 +5,99 @@ const databaseName = "sd-database";
 const collectionName = "results";
 
 const database = {
-  connection: null,
-};
-
-database.connect = async () => {
-  if (!database.connection) {
-    await MongoClient.connect(uri).then((client, err) => {
-      if (err) console.log(err);
-      else {
-        console.log("Connected successfully to database");
-        database.connection = client
-          .db(databaseName)
-          .collection(collectionName);
+  collections: [],
+  getCollection: async (index) => {
+    try {
+      if (!database.collections[index]) {
+        await MongoClient.connect(uri).then((client, err) => {
+          if (err) console.log(err);
+          else {
+            database.collections[index] = client
+              .db(databaseName)
+              .collection(`${collectionName}-${index}`);
+          }
+        });
       }
-    });
-  }
-  return database.connection;
+      return database.collections[index];
+    } catch (error) {
+      console.log(`Error in db.getCollection(${index}): `, error);
+      throw error;
+    }
+  },
 };
 
 database.show = async (id1, id2) => {
   try {
-    console.log("show", {
-      id1,
-      id2,
-    });
+    let result = null;
+    for (const collection of database.collections) {
+      const doc = await collection.findOne({
+        _id: {
+          $in: [`${id1}-${id2}`, `${id2}-${id1}`],
+        },
+      });
+      if (doc) {
+        result = doc;
+        break;
+      }
+    }
+    return result;
   } catch (error) {
     console.log("Error in db.show: ", error);
     throw error;
   }
 };
 
-database.index = async (id1, id2) => {
+database.index = async (ids) => {
   try {
-    console.log("index", {
-      id1,
-      id2,
-    });
+    let result = [];
+    for (const collection of database.collections) {
+      const docs = await collection
+        .find({
+          _id: {
+            $regex: `(${ids.join("|")})`,
+          },
+        })
+        .toArray();
+      if (docs.length) {
+        result.push(...docs);
+      }
+    }
+    return result;
   } catch (error) {
     console.log("Error in db.index: ", error);
     throw error;
   }
 };
 
-database.create = async (id1, id2, data) => {
+database.update = async (id1, id2, match) => {
   try {
-    console.log("create", {
-      id1,
-      id2,
-      data,
-    });
-  } catch (error) {
-    console.log("Error in db.create: ", error);
-    throw error;
-  }
-};
-
-database.update = async (id1, id2, data) => {
-  try {
-    console.log("update", {
-      id1,
-      id2,
-      data,
-    });
+    let result = null;
+    for (const collection of database.collections) {
+      const doc = await collection.findOneAndUpdate(
+        {
+          _id: {
+            $in: [`${id1}-${id2}`, `${id2}-${id1}`],
+          },
+        },
+        {
+          $set: {
+            match,
+          },
+        },
+        {
+          returnOriginal: false,
+        }
+      );
+      if (doc) {
+        result = doc;
+        break;
+      }
+    }
+    return result;
   } catch (error) {
     console.log("Error in db.update: ", error);
     throw error;
   }
 };
 
-database.delete = async (id1, id2) => {
-  try {
-    console.log("delete", {
-      id1,
-      id2,
-    });
-  } catch (error) {
-    console.log("Error in db.delete: ", error);
-    throw error;
-  }
-};
-
-export default await database.connect();
+export default database;

@@ -8,15 +8,21 @@ const global = {
   clients: [],
 };
 
-async function run () {
-  try{
+async function initDatabase() {
+  const startTimer = Date.now();
+  const proteinIds = operations.getProteinIds(0, 5000);
+  await operations.setupDatabase(proteinIds, true);
+  const endTimer = Date.now();
+  console.log(`DATABASE SETUP COMPLETE in ${(endTimer - startTimer) / 1000}s`);
+}
+
+async function run() {
+  try {
     const { isRunning, clients, proteins } = global;
 
     const activeClients = clients.filter((c) => c.state.isActive);
-    
-    console.log(batches.length)
   } catch (err) {
-    console.log('run error: ', err.message);
+    console.log("run error: ", err.message);
   }
 }
 
@@ -26,35 +32,37 @@ const server = express();
 server.use(cors({ origin: "*" }));
 server.use(express.json());
 
-server.post('/join', (req, res) => {
-  try{
-    const url = `${req.protocol}://${req.get('host')}`;
+server.post("/join", (req, res) => {
+  try {
+    const url = `${req.protocol}://${req.get("host")}`;
     const name = operations.getClientName(url);
     const { state } = req.body;
     state.isActive = true;
     global.clients.push({
       name,
       url,
-      state
+      state,
     });
-    console.log(global.clients)
+    console.log(global.clients);
     res.status(200).send({
       name,
-      state
+      state,
     });
   } catch (err) {
-    console.log('/join error: ', err.message);
+    console.log("/join error: ", err.message);
   }
 });
 
 server.listen(port, async () => {
   try {
     console.log(`Server is running on port ${port}`);
-    const proteinIds = operations.getProteinIds();
-    const proteinIdPairs = await operations.buildProteinIdPairs(proteinIds);
+
+    // Initializes database with 5000 proteins
+    // await initDatabase();
+
     setInterval(run, 5000);
   } catch (err) {
-    console.log('server listen error: ', err.message);
+    console.log("server listen error: ", err.message);
   }
 });
 
