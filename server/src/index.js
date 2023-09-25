@@ -10,8 +10,8 @@ const global = {
 
 async function initDatabase() {
   const startTimer = Date.now();
-  const proteinIds = operations.getProteinIds(0, 5000);
-  await operations.setupDatabase(proteinIds, true);
+  const proteinIds = operations.getProteinIds(0, 2000);
+  await operations.setupDatabase(proteinIds);
   const endTimer = Date.now();
   console.log(`DATABASE SETUP COMPLETE in ${(endTimer - startTimer) / 1000}s`);
 }
@@ -57,8 +57,8 @@ server.listen(port, async () => {
   try {
     console.log(`Server is running on port ${port}`);
 
-    // Initializes database with 5000 proteins
-    // await initDatabase();
+    // Initializes database with 2000 proteins
+    await initDatabase();
 
     setInterval(run, 5000);
   } catch (err) {

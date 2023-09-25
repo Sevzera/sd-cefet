@@ -4,52 +4,72 @@ import database from "./database.js";
 
 const operations = {};
 
-operations.setupDatabase = async (proteinIds, resetCollection) => {
+operations.setupDatabase = async (proteinIds) => {
   try {
     const startTimer = Date.now();
 
-    // continue from here
-    const collection = await database.getCollection(index);
-    if (resetCollection) {
-      console.log(`COLL${index} -> Resetting collection...`);
-      await collection.deleteMany();
-      console.log(`COLL${index} -> Collection reset!`);
+    let collCount = database.collections.length;
+    console.log("DB SETUP -> Resetting collections...");
+    for (let collResetIndex = 0; collResetIndex < collCount; collResetIndex++) {
+      await database.resetCollection(collResetIndex);
     }
-    console.log(`COLL${index} -> Inserting null matched pairs...`);
+    console.log("DB SETUP -> Collections reset");
+
+    const proteinCount = proteinIds.length;
+    let docCount = 0;
+    const maxDocsPerCollection = 6000000;
+    let breakIdIndex = 0;
     const promises = [];
-    for (const [i, id1] of proteinIds.entries()) {
-      let pairs = [];
-      for (let j = i; j < proteinIds.length; j++) {
-        const id2 = proteinIds[j];
-        pairs.push([id1, id2]);
-        if (pairs.length >= 1000 || j === proteinIds.length - 1) {
-          const insert = async () => {
-            const docs = pairs.map(([id1, id2]) => ({
-              _id: `${id1}-${id2}`,
-              match: null,
-            }));
-            await collection.insertMany(docs);
+    for (let collIndex = 0; collIndex < collCount; collIndex++) {
+      const collection = await database.getCollection(collIndex);
+      console.log(`COLL${collIndex} -> Inserting null matched pairs...`);
+
+      for (let id1Index = breakIdIndex; id1Index < proteinCount; id1Index++) {
+        let pairs = [];
+        const id1 = proteinIds[id1Index];
+
+        for (let id2Index = id1Index; id2Index < proteinCount; id2Index++) {
+          const id2 = proteinIds[id2Index];
+          pairs.push([id1, id2]);
+
+          if (pairs.length >= 1000 || id2Index === proteinCount - 1) {
+            const insert = async () => {
+              const docs = pairs.map(([id1, id2]) => ({
+                _id: `${id1}-${id2}`,
+                match: null,
+              }));
+              await collection.insertMany(docs);
+              docCount += docs.length;
+            };
+
+            promises.push(insert());
             stdout.clearLine(0);
             stdout.cursorTo(0);
             stdout.write(
-              `COLL${index} -> PROGRESS: ${Number.parseFloat(
-                (i / proteinIds.length) * 100
+              `COLL${collIndex} -> PROGRESS: ${Number.parseFloat(
+                (docCount / maxDocsPerCollection) * 100
               ).toFixed(2)}%`
             );
-          };
-          promises.push(insert());
-          pairs = [];
+
+            pairs = [];
+          }
+        }
+
+        if (docCount > maxDocsPerCollection) {
+          stdout.clearLine(0);
+          stdout.cursorTo(0);
+          console.log(`COLL${collIndex} -> PROGRESS: 100%`);
+          docCount = 0;
+          breakIdIndex = id1Index;
+          break;
         }
       }
     }
 
     await Promise.all(promises);
-    stdout.clearLine(0);
-    stdout.cursorTo(0);
-    console.log(`COLL${index} -> PROGRESS: 100%`);
 
     const endTimer = Date.now();
-    console.log(`COLL${index} -> done in ${(endTimer - startTimer) / 1000}s`);
+    console.log(`DB SETUP -> done in ${(endTimer - startTimer) / 1000}s`);
   } catch (err) {
     console.log(err);
   }

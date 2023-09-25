@@ -2,25 +2,31 @@ import { MongoClient } from "mongodb";
 const uri =
   "mongodb+srv://sev:262951@sd-cluster.6rzpygc.mongodb.net/?retryWrites=true&w=majority";
 const databaseName = "sd-database";
-const collectionName = "results";
+const collectionLabel = "results";
+const client = await MongoClient.connect(uri);
 
 const database = {
-  collections: [],
+  collections: await client.db(databaseName).listCollections().toArray(),
   getCollection: async (index) => {
     try {
-      if (!database.collections[index]) {
-        await MongoClient.connect(uri).then((client, err) => {
-          if (err) console.log(err);
-          else {
-            database.collections[index] = client
-              .db(databaseName)
-              .collection(`${collectionName}-${index}`);
-          }
-        });
-      }
-      return database.collections[index];
+      const name = `${collectionLabel}-${index}`;
+      const db = client.db(databaseName);
+      const collection = database.collections.find((c) => c.name === name);
+      if (collection) return db.collection(collection.name);
+      else throw new Error(`Collection ${name} not found`);
     } catch (error) {
-      console.log(`Error in db.getCollection(${index}): `, error);
+      console.log(`Error in db.getCollection(${index}): `, error.message);
+      throw error;
+    }
+  },
+  resetCollection: async (index) => {
+    try {
+      const db = client.db(databaseName);
+      await db.dropCollection(`${collectionLabel}-${index}`);
+      await db.createCollection(`${collectionLabel}-${index}`);
+      database.collections = await db.listCollections().toArray();
+    } catch (error) {
+      console.log("Error in db.resetCollection: ", error.message);
       throw error;
     }
   },
