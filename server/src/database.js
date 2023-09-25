@@ -22,8 +22,13 @@ const database = {
   resetCollection: async (index) => {
     try {
       const db = client.db(databaseName);
-      await db.dropCollection(`${collectionLabel}-${index}`);
-      await db.createCollection(`${collectionLabel}-${index}`);
+
+      const collectionName = `${collectionLabel}-${index}`;
+      if (database.collections.some((c) => c.name === collectionName)) {
+        await db.dropCollection(collectionName);
+      }
+
+      await db.createCollection(collectionName);
       database.collections = await db.listCollections().toArray();
     } catch (error) {
       console.log("Error in db.resetCollection: ", error.message);

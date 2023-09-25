@@ -9,11 +9,8 @@ const global = {
 };
 
 async function initDatabase() {
-  const startTimer = Date.now();
-  const proteinIds = operations.getProteinIds(0, 2000);
+  const proteinIds = operations.getProteinIds(0, 1000);
   await operations.setupDatabase(proteinIds);
-  const endTimer = Date.now();
-  console.log(`DATABASE SETUP COMPLETE in ${(endTimer - startTimer) / 1000}s`);
 }
 
 async function run() {

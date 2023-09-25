@@ -4,72 +4,85 @@ import database from "./database.js";
 
 const operations = {};
 
+const log = (msg, overwrite = false) => {
+  stdout.clearLine(0);
+  stdout.cursorTo(0);
+  if (overwrite) {
+    stdout.write(msg);
+  } else {
+    console.log(msg);
+  }
+};
+
 operations.setupDatabase = async (proteinIds) => {
   try {
     const startTimer = Date.now();
+    const proteinCount = proteinIds.length;
+    const maxDocCount = (proteinCount * (proteinCount + 1)) / 2;
+    const docCountBound = 500000;
 
-    let collCount = database.collections.length;
-    console.log("DB SETUP -> Resetting collections...");
+    let collCount = Math.ceil(maxDocCount / docCountBound);
+    log(
+      `DB SETUP -> Setting up ${collCount} collections to store ${maxDocCount} documents for ${proteinCount} proteins`
+    );
     for (let collResetIndex = 0; collResetIndex < collCount; collResetIndex++) {
       await database.resetCollection(collResetIndex);
     }
-    console.log("DB SETUP -> Collections reset");
+    log("DB SETUP -> Collections setted up");
 
-    const proteinCount = proteinIds.length;
     let docCount = 0;
-    const maxDocsPerCollection = 6000000;
-    let breakIdIndex = 0;
+    let indexRef = 0;
     const promises = [];
     for (let collIndex = 0; collIndex < collCount; collIndex++) {
       const collection = await database.getCollection(collIndex);
-      console.log(`COLL${collIndex} -> Inserting null matched pairs...`);
-
-      for (let id1Index = breakIdIndex; id1Index < proteinCount; id1Index++) {
+      for (indexRef; indexRef < proteinCount; indexRef++) {
         let pairs = [];
-        const id1 = proteinIds[id1Index];
+        const id1 = proteinIds[indexRef];
 
-        for (let id2Index = id1Index; id2Index < proteinCount; id2Index++) {
-          const id2 = proteinIds[id2Index];
+        for (let indexCmp = indexRef; indexCmp < proteinCount; indexCmp++) {
+          const id2 = proteinIds[indexCmp];
           pairs.push([id1, id2]);
 
-          if (pairs.length >= 1000 || id2Index === proteinCount - 1) {
-            const insert = async () => {
-              const docs = pairs.map(([id1, id2]) => ({
-                _id: `${id1}-${id2}`,
-                match: null,
-              }));
-              await collection.insertMany(docs);
-              docCount += docs.length;
-            };
-
-            promises.push(insert());
-            stdout.clearLine(0);
-            stdout.cursorTo(0);
-            stdout.write(
-              `COLL${collIndex} -> PROGRESS: ${Number.parseFloat(
-                (docCount / maxDocsPerCollection) * 100
-              ).toFixed(2)}%`
-            );
+          if (pairs.length >= 5000 || indexCmp === proteinCount - 1) {
+            const docs = pairs.map(([id1, id2]) => ({
+              _id: `${id1}-${id2}`,
+              match: null,
+            }));
+            promises.push(async () => await collection.insertMany(docs));
 
             pairs = [];
+            docCount += docs.length;
           }
         }
 
-        if (docCount > maxDocsPerCollection) {
-          stdout.clearLine(0);
-          stdout.cursorTo(0);
-          console.log(`COLL${collIndex} -> PROGRESS: 100%`);
-          docCount = 0;
-          breakIdIndex = id1Index;
-          break;
-        }
+        if (docCount >= docCountBound) break;
+      }
+
+      if (docCount >= docCountBound || collIndex === collCount - 1) {
+        log(
+          `DB SETUP -> Set to insert ${docCount} documents into collection ${collIndex}`
+        );
+        docCount = 0;
       }
     }
 
-    await Promise.all(promises);
+    log("DB SETUP -> Inserting documents into collections...");
+    log(`PROGRESS: 0%`, true);
+    let count = 0;
+    await Promise.all(
+      promises.map(async (fn) => {
+        await fn();
+        count += 1;
+        const progress = Number.parseFloat(
+          (count / promises.length) * 100
+        ).toFixed(2);
+        log(`PROGRESS: ${progress}%`, true);
+      })
+    );
+    log("PROGRESS: 100%\n", true);
 
     const endTimer = Date.now();
-    console.log(`DB SETUP -> done in ${(endTimer - startTimer) / 1000}s`);
+    log(`DB SETUP -> Done in ${(endTimer - startTimer) / 1000}s`);
   } catch (err) {
     console.log(err);
   }
