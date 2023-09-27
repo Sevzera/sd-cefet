@@ -43,12 +43,19 @@ operations.setupDatabase = async (proteinIds) => {
           const id2 = proteinIds[indexCmp];
           pairs.push([id1, id2]);
 
-          if (pairs.length >= 5000 || indexCmp === proteinCount - 1) {
+          if (pairs.length >= 10000 || indexCmp === proteinCount - 1) {
             const docs = pairs.map(([id1, id2]) => ({
               _id: `${id1}-${id2}`,
               match: null,
             }));
-            promises.push(async () => await collection.insertMany(docs));
+            promises.push(async () => {
+              await collection.insertMany(docs);
+              count += 1;
+              const progress = Number.parseFloat(
+                (count / promises.length) * 100
+              ).toFixed(2);
+              log(`PROGRESS: ${progress}%`, true);
+            });
 
             pairs = [];
             docCount += docs.length;
@@ -69,22 +76,16 @@ operations.setupDatabase = async (proteinIds) => {
     log("DB SETUP -> Inserting documents into collections...");
     log(`PROGRESS: 0%`, true);
     let count = 0;
-    await Promise.all(
-      promises.map(async (fn) => {
-        await fn();
-        count += 1;
-        const progress = Number.parseFloat(
-          (count / promises.length) * 100
-        ).toFixed(2);
-        log(`PROGRESS: ${progress}%`, true);
-      })
-    );
+    for (let i = 0; i < Math.ceil(promises.length / 1000); i++) {
+      const slicedPromises = promises.slice(i * 1000, (i + 1) * 1000);
+      await Promise.all(slicedPromises.map((fn) => fn()));
+    }
     log("PROGRESS: 100%\n", true);
 
     const endTimer = Date.now();
     log(`DB SETUP -> Done in ${(endTimer - startTimer) / 1000}s`);
   } catch (err) {
-    console.log(err);
+    log(err.message);
   }
 };
 
