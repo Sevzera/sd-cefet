@@ -2,18 +2,47 @@ import { MongoClient } from "mongodb";
 const uri =
   "mongodb+srv://sev:262951@sd-cluster.6rzpygc.mongodb.net/?retryWrites=true&w=majority";
 const databaseName = "sd-database";
+const indexLabel = "index";
 const collectionLabel = "results";
 const client = await MongoClient.connect(uri);
 
+const getAccessibleCollections = async () => {
+  try {
+    const regex = new RegExp(`^${collectionLabel}-[0-9]+$`);
+    const collections = await client
+      .db(databaseName)
+      .listCollections()
+      .toArray();
+    return collections
+      .filter((collection) => regex.test(collection.name))
+      .sort((coll1, coll2) => {
+        const collIndex1 = Number(coll1.name.split("-")[1]);
+        const collIndex2 = Number(coll2.name.split("-")[1]);
+
+        return collIndex1 - collIndex2;
+      });
+  } catch (error) {
+    console.log("Error in getAccessibleCollections: ", error.message);
+    throw error;
+  }
+};
+
 const database = {
-  collections: await client.db(databaseName).listCollections().toArray(),
+  collections: await getAccessibleCollections(),
   getCollection: async (index) => {
     try {
-      const name = `${collectionLabel}-${index}`;
+      let collectionName = `${collectionLabel}-${index}`;
+      if (index === -1) {
+        collectionName = indexLabel;
+      }
+
       const db = client.db(databaseName);
-      const collection = database.collections.find((c) => c.name === name);
+      const collection = database.collections.find(
+        (c) => c.name === collectionName
+      );
+
       if (collection) return db.collection(collection.name);
-      else throw new Error(`Collection ${name} not found`);
+      else throw new Error(`Collection ${collectionName} not found`);
     } catch (error) {
       console.log(`Error in db.getCollection(${index}): `, error.message);
       throw error;
@@ -23,7 +52,11 @@ const database = {
     try {
       const db = client.db(databaseName);
 
-      const collectionName = `${collectionLabel}-${index}`;
+      let collectionName = `${collectionLabel}-${index}`;
+      if (index === -1) {
+        collectionName = indexLabel;
+      }
+
       if (database.collections.some((c) => c.name === collectionName)) {
         await db.dropCollection(collectionName);
       }
@@ -35,80 +68,6 @@ const database = {
       throw error;
     }
   },
-};
-
-database.show = async (id1, id2) => {
-  try {
-    let result = null;
-    for (const collection of database.collections) {
-      const doc = await collection.findOne({
-        _id: {
-          $in: [`${id1}-${id2}`, `${id2}-${id1}`],
-        },
-      });
-      if (doc) {
-        result = doc;
-        break;
-      }
-    }
-    return result;
-  } catch (error) {
-    console.log("Error in db.show: ", error);
-    throw error;
-  }
-};
-
-database.index = async (ids) => {
-  try {
-    let result = [];
-    for (const collection of database.collections) {
-      const docs = await collection
-        .find({
-          _id: {
-            $regex: `(${ids.join("|")})`,
-          },
-        })
-        .toArray();
-      if (docs.length) {
-        result.push(...docs);
-      }
-    }
-    return result;
-  } catch (error) {
-    console.log("Error in db.index: ", error);
-    throw error;
-  }
-};
-
-database.update = async (id1, id2, match) => {
-  try {
-    let result = null;
-    for (const collection of database.collections) {
-      const doc = await collection.findOneAndUpdate(
-        {
-          _id: {
-            $in: [`${id1}-${id2}`, `${id2}-${id1}`],
-          },
-        },
-        {
-          $set: {
-            match,
-          },
-        },
-        {
-          returnOriginal: false,
-        }
-      );
-      if (doc) {
-        result = doc;
-        break;
-      }
-    }
-    return result;
-  } catch (error) {
-    console.log("Error in db.update: ", error);
-    throw error;
-  }
 };
 
 export default database;

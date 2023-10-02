@@ -13,9 +13,12 @@ async function initDatabase() {
   await operations.setupDatabase(proteinIds);
 }
 
+
 async function run() {
   try {
     const { isRunning, clients, proteins } = global;
+
+    console.log(await operations.getPairByMatch())
 
     const activeClients = clients.filter((c) => c.state.isActive);
   } catch (err) {
@@ -55,7 +58,7 @@ server.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
 
     // Initializes database with 4000 proteins
-    await initDatabase();
+    // await initDatabase();
 
     setInterval(run, 5000);
   } catch (err) {

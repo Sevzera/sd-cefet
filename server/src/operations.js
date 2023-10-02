@@ -21,11 +21,15 @@ operations.setupDatabase = async (proteinIds) => {
     const maxDocCount = (proteinCount * (proteinCount + 1)) / 2;
     const docCountBound = 500000;
 
-    let collCount = Math.ceil(maxDocCount / docCountBound);
+    let collCount = Math.floor(maxDocCount / docCountBound);
     log(
       `DB SETUP -> Setting up ${collCount} collections to store ${maxDocCount} documents for ${proteinCount} proteins`
     );
-    for (let collResetIndex = 0; collResetIndex < collCount; collResetIndex++) {
+    for (
+      let collResetIndex = -1;
+      collResetIndex < collCount;
+      collResetIndex++
+    ) {
       await database.resetCollection(collResetIndex);
     }
     log("DB SETUP -> Collections setted up");
@@ -33,8 +37,11 @@ operations.setupDatabase = async (proteinIds) => {
     let docCount = 0;
     let indexRef = 0;
     const promises = [];
+    const index = await database.getCollection(-1);
     for (let collIndex = 0; collIndex < collCount; collIndex++) {
       const collection = await database.getCollection(collIndex);
+      const indexedIds = [];
+
       for (indexRef; indexRef < proteinCount; indexRef++) {
         let pairs = [];
         const id1 = proteinIds[indexRef];
@@ -62,6 +69,8 @@ operations.setupDatabase = async (proteinIds) => {
           }
         }
 
+        indexedIds.push(id1);
+
         if (docCount >= docCountBound) break;
       }
 
@@ -70,6 +79,14 @@ operations.setupDatabase = async (proteinIds) => {
           `DB SETUP -> Set to insert ${docCount} documents into collection ${collIndex}`
         );
         docCount = 0;
+        indexRef += 1;
+
+        const docs = indexedIds.map((id) => ({
+          _id: id,
+          collection: collIndex,
+        }));
+
+        promises.push(() => index.insertMany(docs));
       }
     }
 
@@ -101,6 +118,165 @@ operations.getProteinIds = (start, end) => {
 operations.getClientName = (url) => {
   const name = url.split("//")[1].split(":")[0];
   return name;
+};
+
+operations.getPair = async (id1, id2) => {
+  try {
+    const index = await database.getCollection(-1);
+    const indexes = await index
+      .find({
+        _id: {
+          $in: [id1, id2],
+        },
+      })
+      .toArray();
+    const collIndexes = indexes.map((index) => index.collection);
+
+    let result = null;
+    for (const collIndex of collIndexes) {
+      const collection = await database.getCollection(collIndex);
+      const doc = await collection.findOne({
+        _id: {
+          $in: [`${id1}-${id2}`, `${id2}-${id1}`],
+        },
+      });
+      if (doc) {
+        result = doc;
+        break;
+      }
+    }
+    return result;
+  } catch (error) {
+    console.log("Error in db.getPair: ", error);
+    throw error;
+  }
+};
+
+operations.getPairs = async (ids = []) => {
+  try {
+    const index = await database.getCollection(-1);
+    const indexes = await index
+      .find({
+        _id: {
+          $in: ids,
+        },
+      })
+      .toArray();
+    const collIndexes = indexes.map((index) => index.collection);
+
+    let result = [];
+    for (const collIndex of collIndexes) {
+      const collection = await database.getCollection(collIndex);
+      const docs = await collection
+        .find({
+          _id: {
+            $regex: `(${ids.join("|")})`,
+          },
+        })
+        .toArray();
+      if (docs.length) {
+        result.push(...docs);
+      }
+    }
+    return result;
+  } catch (error) {
+    console.log("Error in db.getPairs: ", error);
+    throw error;
+  }
+};
+
+operations.getPairByMatch = async (
+  match = null,
+  size = 1,
+  batchIndex = 503873
+) => {
+  try {
+    const collection = await database.getCollection(0);
+    const collectionsToUnify = database.collections
+      .map((collection) => collection.name)
+      .splice(1);
+
+    // continue from here
+    const lookupStage = collectionsToUnify.map((collName) => ({
+      $lookup: {
+        from: collName,
+        as: collName,
+        pipeline: [],
+      },
+    }));
+    const unionStage = [
+      {
+        $project: {
+          union: {
+            $concatArrays: collectionsToUnify.map((collName) => `${collName}`),
+          },
+        },
+      },
+      {
+        $unwind: "$union",
+      },
+      {
+        $replaceRoot: {
+          newRoot: "$union",
+        },
+      },
+    ];
+    const matchStage = [
+      {
+        $match: {
+          match: {
+            ...(match === null && { $eq: null }),
+            ...(typeof match === "number" && { $gte: match }),
+          },
+        },
+      },
+    ];
+    const paginationStage = [{ $skip: batchIndex * size }, { $limit: size }];
+    const pipeline = [
+      ...lookupStage,
+      ...unionStage,
+      ...unionStage,
+      ...matchStage,
+      ...paginationStage,
+    ];
+    const result = await collection.aggregate(pipeline).toArray();
+
+    return result;
+  } catch (error) {
+    console.log("Error in db.getPairByMatch: ", error);
+    throw error;
+  }
+};
+
+operations.setPairMatch = async (id1, id2, match) => {
+  try {
+    let result = null;
+    for (const collection of database.collections) {
+      const doc = await collection.findOneAndUpdate(
+        {
+          _id: {
+            $in: [`${id1}-${id2}`, `${id2}-${id1}`],
+          },
+        },
+        {
+          $set: {
+            match,
+          },
+        },
+        {
+          returnOriginal: false,
+        }
+      );
+      if (doc) {
+        result = doc;
+        break;
+      }
+    }
+    return result;
+  } catch (error) {
+    console.log("Error in db.setPairMatch: ", error);
+    throw error;
+  }
 };
 
 export default operations;
