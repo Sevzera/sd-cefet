@@ -152,7 +152,7 @@ operations.getPair = async (id1, id2) => {
   }
 };
 
-operations.getPairs = async (ids = []) => {
+operations.getPairs = async (ids = [], size = 1) => {
   try {
     const index = await database.getCollection(-1);
     const indexes = await index
@@ -168,11 +168,14 @@ operations.getPairs = async (ids = []) => {
     for (const collIndex of collIndexes) {
       const collection = await database.getCollection(collIndex);
       const docs = await collection
-        .find({
-          _id: {
-            $regex: `(${ids.join("|")})`,
+        .find(
+          {
+            _id: {
+              $regex: `(${ids.join("|")})`,
+            },
           },
-        })
+          { $limit: size }
+        )
         .toArray();
       if (docs.length) {
         result.push(...docs);
@@ -185,43 +188,19 @@ operations.getPairs = async (ids = []) => {
   }
 };
 
-operations.getPairByMatch = async (
-  match = null,
-  size = 1,
-  batchIndex = 503873
-) => {
+operations.getPairsByMatch = async (match = null, size = 1) => {
   try {
     const collection = await database.getCollection(0);
     const collectionsToUnify = database.collections
       .map((collection) => collection.name)
       .splice(1);
 
-    // continue from here
-    const lookupStage = collectionsToUnify.map((collName) => ({
-      $lookup: {
-        from: collName,
-        as: collName,
-        pipeline: [],
-      },
-    }));
-    const unionStage = [
-      {
-        $project: {
-          union: {
-            $concatArrays: collectionsToUnify.map((collName) => `${collName}`),
-          },
+    const pipeline = [
+      ...collectionsToUnify.map((collection) => ({
+        $unionWith: {
+          coll: collection,
         },
-      },
-      {
-        $unwind: "$union",
-      },
-      {
-        $replaceRoot: {
-          newRoot: "$union",
-        },
-      },
-    ];
-    const matchStage = [
+      })),
       {
         $match: {
           match: {
@@ -230,14 +209,7 @@ operations.getPairByMatch = async (
           },
         },
       },
-    ];
-    const paginationStage = [{ $skip: batchIndex * size }, { $limit: size }];
-    const pipeline = [
-      ...lookupStage,
-      ...unionStage,
-      ...unionStage,
-      ...matchStage,
-      ...paginationStage,
+      { $limit: size },
     ];
     const result = await collection.aggregate(pipeline).toArray();
 

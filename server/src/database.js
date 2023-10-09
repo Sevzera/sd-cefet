@@ -31,12 +31,13 @@ const database = {
   collections: await getAccessibleCollections(),
   getCollection: async (index) => {
     try {
+      const db = client.db(databaseName);
+
       let collectionName = `${collectionLabel}-${index}`;
       if (index === -1) {
-        collectionName = indexLabel;
+        return db.collection(indexLabel);
       }
 
-      const db = client.db(databaseName);
       const collection = database.collections.find(
         (c) => c.name === collectionName
       );
@@ -54,7 +55,9 @@ const database = {
 
       let collectionName = `${collectionLabel}-${index}`;
       if (index === -1) {
-        collectionName = indexLabel;
+        await db.dropCollection(indexLabel);
+        await db.createCollection(indexLabel);
+        return;
       }
 
       if (database.collections.some((c) => c.name === collectionName)) {

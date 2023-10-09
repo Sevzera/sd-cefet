@@ -18,7 +18,7 @@ async function run() {
   try {
     const { isRunning, clients, proteins } = global;
 
-    console.log(await operations.getPairByMatch())
+    console.log(await operations.getPairsByMatch(null));
 
     const activeClients = clients.filter((c) => c.state.isActive);
   } catch (err) {
