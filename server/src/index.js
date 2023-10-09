@@ -3,9 +3,25 @@ import axios from "axios";
 import cors from "cors";
 import operations from "./operations.js";
 
-const global = {
+const status = {
+  AVAILABLE: "Available",
+  BUSY: "Busy",
+  ERROR: "Error",
+};
+
+const state = {
   isRunning: false,
-  clients: [],
+  clients: [
+    {
+      name: "",
+      url: "",
+      status: "",
+      queue: [],
+    },
+  ],
+  queue: [],
+  processing: [],
+  results: [],
 };
 
 async function initDatabase() {
@@ -13,14 +29,20 @@ async function initDatabase() {
   await operations.setupDatabase(proteinIds);
 }
 
-
 async function run() {
   try {
-    const { isRunning, clients, proteins } = global;
+    if (state.isRunning) return;
+    state.isRunning = true;
 
-    console.log(await operations.getPairsByMatch(null));
+    if (state.queue <= 100) {
+      const pairs = await operations.getNullPairs(null, 1000, state.processing);
+      state.queue.push(...pairs);
+    }
 
-    const activeClients = clients.filter((c) => c.state.isActive);
+    // continue from here
+
+    const { clients } = state;
+    console.log(clients);
   } catch (err) {
     console.log("run error: ", err.message);
   }
@@ -36,18 +58,25 @@ server.post("/join", (req, res) => {
   try {
     const url = `${req.protocol}://${req.get("host")}`;
     const name = operations.getClientName(url);
-    const { state } = req.body;
-    state.isActive = true;
-    global.clients.push({
-      name,
-      url,
-      state,
-    });
-    console.log(global.clients);
-    res.status(200).send({
-      name,
-      state,
-    });
+
+    const index = state.clients.findIndex((c) => c.name === name);
+    let client = null;
+    if (index === -1) {
+      client = {
+        name,
+        url,
+        status: status.AVAILABLE,
+        queue: [],
+      };
+      state.clients.push(client);
+    } else {
+      client = state.clients[index];
+      client.url = url;
+      client.status = status.AVAILABLE;
+      client.queue = [];
+    }
+
+    res.status(200).send(client);
   } catch (err) {
     console.log("/join error: ", err.message);
   }

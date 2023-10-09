@@ -188,7 +188,7 @@ operations.getPairs = async (ids = [], size = 1) => {
   }
 };
 
-operations.getPairsByMatch = async (match = null, size = 1) => {
+operations.getNullPairs = async (match = null, size = 1, exceptions = []) => {
   try {
     const collection = await database.getCollection(0);
     const collectionsToUnify = database.collections
@@ -203,6 +203,9 @@ operations.getPairsByMatch = async (match = null, size = 1) => {
       })),
       {
         $match: {
+          _id: {
+            $nin: exceptions,
+          },
           match: {
             ...(match === null && { $eq: null }),
             ...(typeof match === "number" && { $gte: match }),
