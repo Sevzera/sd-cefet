@@ -22,15 +22,17 @@ const state = {
 async function show() {
   try {
     console.clear();
+
+    const notDone = state.queue.filter((pair) => !pair.match).length;
+    const done = state.queue.length - notDone;
     console.log(
       "----------------------------------------\n" +
         "STATE\n\n" +
-        Object.entries(state)
-          .map(
-            ([key, value]) =>
-              `${key}: ${Array.isArray(value) ? value.length : value}`
-          )
-          .join("\n") +
+        `NAME: ${state.name}\n` +
+        `URL: ${state.url}\n` +
+        `STATUS: ${state.status}\n` +
+        `\nNOT DONE: ${notDone}\n` +
+        `DONE: ${done}\n` +
         "\n----------------------------------------"
     );
   } catch (error) {
@@ -55,7 +57,7 @@ client.listen(PORT, async () => {
       state.url = url;
       state.status = status;
       state.queue = queue;
-      setInterval(show, 1000);
+      setInterval(show, 50);
     }
   } catch (error) {
     console.error("client listen error: ", error);
@@ -82,7 +84,7 @@ client.post("/run", async (req, res) => {
 
 operations.sleep = (s) => {
   try {
-    return new Promise((resolve) => setTimeout(resolve, s));
+    return new Promise((resolve) => setTimeout(resolve, s * 100));
   } catch (error) {
     throw error;
   }
@@ -105,7 +107,7 @@ operations.processPair = async (pair) => {
 operations.process = async () => {
   try {
     const processes = [];
-    state.queue.forEach((pair) => {
+    state.queue.forEach((pair, index) => {
       processes.push(operations.processPair(pair));
     });
     await Promise.all(processes);

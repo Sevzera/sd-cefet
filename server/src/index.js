@@ -31,10 +31,6 @@ const switchIsRunning = () => (state.is_running = !state.is_running);
 
 async function run() {
   try {
-    const { is_running } = state;
-    if (is_running) return;
-    switchIsRunning();
-
     const { clients, queue, done } = state;
 
     console.clear();
@@ -54,6 +50,10 @@ async function run() {
           .map((client) => client.name)}\n` +
         "\n----------------------------------------"
     );
+
+    const { is_running } = state;
+    if (is_running) return;
+    switchIsRunning();
 
     if (state.done.length >= 1000) {
       const { interval_id } = state;
@@ -88,12 +88,11 @@ async function run() {
           .post(`${client.url}/run`, {
             new_state: client,
           })
-          .then(({ status }) => {
-            if (status !== 200) {
-              client.status = status.ERROR;
-              queue.push(...client.queue);
-              client.queue = [];
-            }
+          .catch((error) => {
+            console.error("run error: ", error);
+            client.status = status.ERROR;
+            queue.push(...client.queue);
+            client.queue = [];
           });
       }
     }
@@ -168,7 +167,7 @@ server.listen(SERVER_PORT, async () => {
     // Initializes database with 4000 proteins
     // await initDatabase();
 
-    state.interval_id = setInterval(run, 5000);
+    state.interval_id = setInterval(run, 50);
   } catch (error) {
     console.error("server listen error: ", error);
   }
