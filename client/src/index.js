@@ -1,87 +1,115 @@
+import "dotenv/config";
 import express from "express";
 import axios from "axios";
 import cors from "cors";
+const { CLIENT_HOST, CLIENT_PORT, SERVER_HOST, SERVER_PORT } = process.env;
+const SERVER_URL = `http://${SERVER_HOST}:${SERVER_PORT}`;
 
-const serverUrl = "http://localhost:1999";
-
-let shouldReportError = false;
-const state = {
-  name: "",
-  url: "",
-  status: "",
-  queue: [],
-  results: [],
-};
 const operations = {};
 
-const port = 2000;
 const client = express();
 
 client.use(cors({ origin: "*" }));
 client.use(express.json());
 
-client.listen(port, async () => {
+const state = {
+  name: null,
+  url: null,
+  status: null,
+  queue: [],
+};
+
+async function show() {
   try {
-    console.log(`Client is running on port ${port}`);
-    const { status, data } = await axios.post(`${serverUrl}/join`);
+    console.clear();
+    console.log(
+      "----------------------------------------\n" +
+        "STATE\n\n" +
+        Object.entries(state)
+          .map(
+            ([key, value]) =>
+              `${key}: ${Array.isArray(value) ? value.length : value}`
+          )
+          .join("\n") +
+        "\n----------------------------------------"
+    );
+  } catch (error) {
+    console.error("show error: ", error);
+  }
+}
+
+const PORT_OFFSET = Number(process.argv[2]) || 0;
+const PORT = Number(CLIENT_PORT) + PORT_OFFSET;
+client.listen(PORT, async () => {
+  try {
+    console.log(`Client is listening on port ${PORT}`);
+
+    const { status, data } = await axios.post(`${SERVER_URL}/join`, {
+      host: CLIENT_HOST,
+      port: PORT,
+    });
+
     if (status === 200) {
-      state.name = data.name;
-      state.url = data.url;
-      state.status = data.status;
-      state.queue = data.queue;
-      state.results = [];
+      const { name, url, status, queue } = data.new_state;
+      state.name = name;
+      state.url = url;
+      state.status = status;
+      state.queue = queue;
+      setInterval(show, 1000);
     }
-  } catch (err) {
-    console.log("client listen error: ", err.message);
+  } catch (error) {
+    console.error("client listen error: ", error);
   }
 });
 
-client.get("/check", async (req, res) => {
+client.post("/run", async (req, res) => {
   try {
-    if (shouldReportError) {
-      res.status(500);
-      shouldReportError = false;
-    } else {
-      res.status(200);
-    }
-  } catch (err) {
-    console.log("/state error: ", err.message);
-  }
-});
+    const { body } = req;
+    const { status, queue } = body.new_state;
+    state.status = status;
+    state.queue = queue;
+    res.status(200);
 
-client.post("/process", async (req, res) => {
-  try {
-    const { pairs } = req.body;
-    const results = await operations.processPairs(pairs);
-    res.status(200).send(results);
-  } catch (err) {
-    shouldReportError = true;
-    console.log("/process error: ", err.message);
+    await operations.process();
+    await axios.post(`${SERVER_URL}/done`, {
+      new_state: state,
+    });
+  } catch (error) {
+    res.status(500);
+    console.error("run error: ", error);
   }
 });
 
 operations.sleep = (s) => {
-  return new Promise((resolve) => setTimeout(resolve, s * 1000));
-};
-
-operations.processPair = async (id1, id2) => {
-  const time = Number(Math.random() * 10).toFixed(2);
-  await operations.sleep(time);
-  const match = Number(Math.random() * 100).toFixed(2);
-
-  return {
-    id1,
-    id2,
-    match,
-  };
-};
-
-operations.processPairs = async (pairs) => {
-  const processes = [];
-  for (const pair of pairs) {
-    const [id1, id2] = pair;
-    processes.push(operations.processPair(id1, id2));
+  try {
+    return new Promise((resolve) => setTimeout(resolve, s));
+  } catch (error) {
+    throw error;
   }
+};
 
-  return await Promise.all(processes);
+operations.processPair = async (pair) => {
+  try {
+    const time = Number(Math.random() * 10).toFixed(2);
+    await operations.sleep(time);
+    const match = Number(Math.random() * 100).toFixed(2);
+    pair = {
+      _id: pair,
+      match,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+operations.process = async () => {
+  try {
+    const processes = [];
+    state.queue.forEach((pair) => {
+      processes.push(operations.processPair(pair));
+    });
+    await Promise.all(processes);
+  } catch (error) {
+    throw error;
+  }
 };

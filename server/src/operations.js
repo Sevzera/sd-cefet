@@ -1,18 +1,8 @@
 import fs from "fs";
-import { stdout } from "process";
+import utils from "./utils.js";
 import database from "./database.js";
 
 const operations = {};
-
-const log = (msg, overwrite = false) => {
-  stdout.clearLine(0);
-  stdout.cursorTo(0);
-  if (overwrite) {
-    stdout.write(msg);
-  } else {
-    console.log(msg);
-  }
-};
 
 operations.setupDatabase = async (proteinIds) => {
   try {
@@ -22,7 +12,7 @@ operations.setupDatabase = async (proteinIds) => {
     const docCountBound = 500000;
 
     let collCount = Math.floor(maxDocCount / docCountBound);
-    log(
+    utils.log(
       `DB SETUP -> Setting up ${collCount} collections to store ${maxDocCount} documents for ${proteinCount} proteins`
     );
     for (
@@ -32,7 +22,7 @@ operations.setupDatabase = async (proteinIds) => {
     ) {
       await database.resetCollection(collResetIndex);
     }
-    log("DB SETUP -> Collections setted up");
+    utils.log("DB SETUP -> Collections setted up");
 
     let docCount = 0;
     let indexRef = 0;
@@ -61,7 +51,7 @@ operations.setupDatabase = async (proteinIds) => {
               const progress = Number.parseFloat(
                 (count / promises.length) * 100
               ).toFixed(2);
-              log(`PROGRESS: ${progress}%`, true);
+              utils.log(`PROGRESS: ${progress}%`, true);
             });
 
             pairs = [];
@@ -75,7 +65,7 @@ operations.setupDatabase = async (proteinIds) => {
       }
 
       if (docCount >= docCountBound || collIndex === collCount - 1) {
-        log(
+        utils.log(
           `DB SETUP -> Set to insert ${docCount} documents into collection ${collIndex}`
         );
         docCount = 0;
@@ -90,19 +80,20 @@ operations.setupDatabase = async (proteinIds) => {
       }
     }
 
-    log("DB SETUP -> Inserting documents into collections...");
-    log(`PROGRESS: 0%`, true);
+    utils.log("DB SETUP -> Inserting documents into collections...");
+    utils.log(`PROGRESS: 0%`, true);
     let count = 0;
     for (let i = 0; i < Math.ceil(promises.length / 1000); i++) {
       const slicedPromises = promises.slice(i * 1000, (i + 1) * 1000);
       await Promise.all(slicedPromises.map((fn) => fn()));
     }
-    log("PROGRESS: 100%\n", true);
+    utils.log("PROGRESS: 100%\n", true);
 
     const endTimer = Date.now();
-    log(`DB SETUP -> Done in ${(endTimer - startTimer) / 1000}s`);
-  } catch (err) {
-    log(err.message);
+    utils.log(`DB SETUP -> Done in ${(endTimer - startTimer) / 1000}s`);
+  } catch (error) {
+    console.error("Error in operations.setupDatabase: ", error);
+    throw error;
   }
 };
 
@@ -110,14 +101,10 @@ operations.getProteinIds = (start, end) => {
   try {
     const ids = fs.readFileSync("./src/ids.txt").toString().split(",");
     return ids.slice(start, end);
-  } catch (err) {
-    console.log(err);
+  } catch (error) {
+    console.error("Error in operations.setupDatabase: ", error);
+    throw error;
   }
-};
-
-operations.getClientName = (url) => {
-  const name = url.split("//")[1].split(":")[0];
-  return name;
 };
 
 operations.getPair = async (id1, id2) => {
@@ -147,7 +134,7 @@ operations.getPair = async (id1, id2) => {
     }
     return result;
   } catch (error) {
-    console.log("Error in db.getPair: ", error);
+    console.error("Error in operations.getPair: ", error);
     throw error;
   }
 };
@@ -183,7 +170,7 @@ operations.getPairs = async (ids = [], size = 1) => {
     }
     return result;
   } catch (error) {
-    console.log("Error in db.getPairs: ", error);
+    console.error("Error in operations.getPairs: ", error);
     throw error;
   }
 };
@@ -216,9 +203,10 @@ operations.getNullPairs = async (match = null, size = 1, exceptions = []) => {
     ];
     const result = await collection.aggregate(pipeline).toArray();
 
-    return result;
+    const pairs = result.map((doc) => doc._id);
+    return pairs;
   } catch (error) {
-    console.log("Error in db.getPairByMatch: ", error);
+    console.error("Error in operations.getNullPairs: ", error);
     throw error;
   }
 };
@@ -249,7 +237,7 @@ operations.setPairMatch = async (id1, id2, match) => {
     }
     return result;
   } catch (error) {
-    console.log("Error in db.setPairMatch: ", error);
+    console.error("Error in operations.setPairMatch: ", error);
     throw error;
   }
 };
