@@ -6,6 +6,10 @@ import operations from "./operations.js";
 import utils from "./utils.js";
 const { SERVER_PORT } = process.env;
 
+const CLIENT_QUEUE_SIZE = 100;
+const MIN_QUEUE_SIZE = 500;
+const REFILL_BATCH_SIZE = 1000;
+
 const status = {
   AVAILABLE: "Available",
   BUSY: "Busy",
@@ -27,47 +31,47 @@ const state = {
   done: [],
 };
 
+const show = () => {
+  const { clients, queue, done } = state;
+
+  console.clear();
+  console.log(
+    "----------------------------------------\n" +
+      "STATE\n\n" +
+      `QUEUE: ${queue.length}\n` +
+      `DONE: ${done.length}\n` +
+      `CLIENTS AVAILABLE: ${clients
+        .filter((client) => client.status === status.AVAILABLE)
+        .map((client) => client.name)}\n` +
+      `CLIENTS BUSY: ${clients
+        .filter((client) => client.status === status.BUSY)
+        .map((client) => client.name)}\n` +
+      `CLIENTS ERROR: ${clients
+        .filter((client) => client.status === status.ERROR)
+        .map((client) => client.name)}\n` +
+      "\n----------------------------------------"
+  );
+};
+
 const switchIsRunning = () => (state.is_running = !state.is_running);
 
 async function run() {
   try {
-    const { clients, queue, done } = state;
+    const { clients, queue } = state;
 
-    console.clear();
-    console.log(
-      "----------------------------------------\n" +
-        "STATE\n\n" +
-        `QUEUE: ${queue.length}\n` +
-        `DONE: ${done.length}\n` +
-        `CLIENTS AVAILABLE: ${clients
-          .filter((client) => client.status === status.AVAILABLE)
-          .map((client) => client.name)}\n` +
-        `CLIENTS BUSY: ${clients
-          .filter((client) => client.status === status.BUSY)
-          .map((client) => client.name)}\n` +
-        `CLIENTS ERROR: ${clients
-          .filter((client) => client.status === status.ERROR)
-          .map((client) => client.name)}\n` +
-        "\n----------------------------------------"
-    );
+    show();
 
     const { is_running } = state;
     if (is_running) return;
     switchIsRunning();
 
-    if (state.done.length >= 1000) {
-      const { interval_id } = state;
-      clearInterval(interval_id);
-    }
-
     // REFILL QUEUE IF NEEDED
-    if (queue.length < 100) {
-      const size = 200 - queue.length;
+    if (queue.length < MIN_QUEUE_SIZE) {
       const processing = clients.reduce(
         (accumulator, client) => [...accumulator, ...client.queue],
         []
       );
-      const pairs = await operations.getNullPairs(null, size, [
+      const pairs = await operations.getPairsByMatch(null, REFILL_BATCH_SIZE, [
         ...processing,
         ...queue,
       ]);
@@ -78,12 +82,9 @@ async function run() {
     for (const client of clients) {
       if (client.status === status.ERROR) continue;
 
-      if (client.status === status.AVAILABLE) {
-        const client_queue = queue.splice(0, 50);
-        if (!client_queue.length) continue;
-
+      if (client.status === status.AVAILABLE && queue.length) {
         client.status = status.BUSY;
-        client.queue = client_queue;
+        client.queue = queue.splice(0, CLIENT_QUEUE_SIZE);
         axios
           .post(`${client.url}/run`, {
             new_state: client,
@@ -152,7 +153,7 @@ server.post("/done", (req, res) => {
       (client) => client.name === new_state.name
     );
 
-    state.done.push(...new_state.queue);
+    state.done.push(...new_state.done);
     client.status = status.AVAILABLE;
     client.queue = [];
   } catch (error) {

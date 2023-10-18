@@ -175,7 +175,11 @@ operations.getPairs = async (ids = [], size = 1) => {
   }
 };
 
-operations.getNullPairs = async (match = null, size = 1, exceptions = []) => {
+operations.getPairsByMatch = async (
+  match = null,
+  size = 1,
+  exceptions = []
+) => {
   try {
     const collection = await database.getCollection(0);
     const collectionsToUnify = database.collections
@@ -206,7 +210,7 @@ operations.getNullPairs = async (match = null, size = 1, exceptions = []) => {
     const pairs = result.map((doc) => doc._id);
     return pairs;
   } catch (error) {
-    console.error("Error in operations.getNullPairs: ", error);
+    console.error("Error in operations.getPairsByMatch: ", error);
     throw error;
   }
 };
