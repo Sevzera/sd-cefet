@@ -32,7 +32,7 @@ async function show() {
         `NAME: ${state.name}\n` +
         `URL: ${state.url}\n` +
         `STATUS: ${state.status}\n` +
-        `\nQUEUE: ${state.queue.length}\n` +
+        `\nQUEUE: ${state.queue.length - state.done.length}\n` +
         `DONE: ${state.done.length}\n` +
         "\n----------------------------------------"
     );
