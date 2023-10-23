@@ -27,14 +27,14 @@ async function show() {
   try {
     console.clear();
     console.log(
-      "----------------------------------------\n" +
+      "---------------------------------\n" +
         "STATE\n\n" +
         `NAME: ${state.name}\n` +
         `URL: ${state.url}\n` +
         `STATUS: ${state.status}\n` +
         `\nQUEUE: ${state.queue.length - state.done.length}\n` +
         `DONE: ${state.done.length}\n` +
-        "\n----------------------------------------"
+        "\n---------------------------------"
     );
   } catch (error) {
     throw error;
@@ -69,7 +69,7 @@ const setupConnection = async () => {
       is_connected = false;
       console.log(
         "Lost connection to server, trying again in 5 seconds" +
-          "\n----------------------------------------"
+          "\n---------------------------------"
       );
       retry_timeout_id = setTimeout(setupConnection, 5000);
     } else throw error;

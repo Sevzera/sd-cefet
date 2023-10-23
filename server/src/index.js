@@ -31,12 +31,13 @@ const state = {
   done: [],
 };
 
+const messages = [];
 const show = () => {
   const { clients, queue, done } = state;
 
   console.clear();
   console.log(
-    "----------------------------------------\n" +
+    "---------------------------------\n" +
       "STATE\n\n" +
       `QUEUE: ${queue.length}\n` +
       `DONE: ${done.length}\n` +
@@ -49,7 +50,8 @@ const show = () => {
       `CLIENTS ERROR: ${clients
         .filter((client) => client.status === status.ERROR)
         .map((client) => client.name)}\n` +
-      "\n----------------------------------------"
+      "\n---------------------------------\n" +
+      messages.map((message) => message + "\n").join("")
   );
 };
 
@@ -89,8 +91,8 @@ async function run() {
           .post(`${client.url}/run`, {
             new_state: client,
           })
-          .catch((error) => {
-            console.error("run error: ", error);
+          .catch(({ code }) => {
+            messages.push(`Lost connection with ${client.name} [${code}]`);
             client.status = status.ERROR;
             queue.push(...client.queue);
             client.queue = [];
@@ -141,6 +143,7 @@ server.post("/join", (req, res) => {
     res.status(200).send({
       new_state: client,
     });
+    messages.push(`${client.name} joined`);
   } catch (error) {
     console.error("/join error: ", error);
   }
