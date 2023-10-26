@@ -5,6 +5,8 @@ import cors from "cors";
 const { CLIENT_HOST, CLIENT_PORT, SERVER_HOST, SERVER_PORT } = process.env;
 const SERVER_URL = `http://${SERVER_HOST}:${SERVER_PORT}`;
 
+const MAX_MESSAGES = 4;
+
 const operations = {};
 
 const client = express();
@@ -12,8 +14,8 @@ const client = express();
 client.use(cors({ origin: "*" }));
 client.use(express.json());
 
-let is_connected = false;
 let retry_timeout_id = null;
+let show_interval_id = null;
 
 const state = {
   name: null,
@@ -23,8 +25,12 @@ const state = {
   done: [],
 };
 
+const messages = [];
 async function show() {
   try {
+    if (messages.length >= MAX_MESSAGES)
+      messages.splice(0, messages.length - MAX_MESSAGES);
+
     console.clear();
     console.log(
       "---------------------------------\n" +
@@ -34,7 +40,8 @@ async function show() {
         `STATUS: ${state.status}\n` +
         `\nQUEUE: ${state.queue.length - state.done.length}\n` +
         `DONE: ${state.done.length}\n` +
-        "\n---------------------------------"
+        "\n---------------------------------\n" +
+        messages.map((message) => message + "\n").join("")
     );
   } catch (error) {
     throw error;
@@ -46,39 +53,42 @@ const PORT = Number(CLIENT_PORT) + PORT_OFFSET;
 
 const setupConnection = async () => {
   try {
-    console.log("Setting up connection to server...");
-
-    const { status, data } = await axios.post(`${SERVER_URL}/join`, {
-      host: CLIENT_HOST,
-      port: PORT,
-    });
-
-    if (status === 200) {
-      const { name, url, status, queue } = data.new_state;
-      is_connected = true;
-      state.name = name;
-      state.url = url;
-      state.status = status;
-      state.queue = queue;
-      state.done = [];
-      clearInterval(retry_timeout_id);
-      setInterval(show, 1000);
-    }
+    messages.push("Trying to connect to server...");
+    await axios
+      .post(`${SERVER_URL}/join`, {
+        host: CLIENT_HOST,
+        port: PORT,
+      })
+      .then(({ data }) => {
+        messages.push("Connected to server");
+        const { name, url, status, queue } = data.new_state;
+        state.name = name;
+        state.url = url;
+        state.status = status;
+        state.queue = queue;
+        state.done = [];
+        clearInterval(retry_timeout_id);
+      })
+      .catch(({ response, code }) => {
+        // both are undefined for some reason ^
+        if (response) {
+          messages.push(
+            `Couldn't connect to server [${code}], trying again in 5 seconds`
+          );
+        } else {
+          messages.push("Server is down, trying again in 5 seconds");
+        }
+        retry_timeout_id = setTimeout(setupConnection, 5000);
+      });
   } catch (error) {
-    if (error.code === "ECONNREFUSED" || error.code === "ECONNRESET") {
-      is_connected = false;
-      console.log(
-        "Lost connection to server, trying again in 5 seconds" +
-          "\n---------------------------------"
-      );
-      retry_timeout_id = setTimeout(setupConnection, 5000);
-    } else throw error;
+    throw error;
   }
 };
 
 client.listen(PORT, async () => {
   try {
-    console.log(`Client is listening on port ${PORT}`);
+    messages.push(`Client is listening on port ${PORT}`);
+    show_interval_id = setInterval(show, 1000);
     await setupConnection();
   } catch (error) {
     console.error("client listen error: ", error);
@@ -92,12 +102,22 @@ client.post("/run", async (req, res) => {
     state.status = status;
     state.queue = queue;
     state.done = [];
-    res.status(200);
+    res.status(200).send("Processing...");
 
     await operations.process();
-    await axios.post(`${SERVER_URL}/done`, {
-      new_state: state,
-    });
+    await axios
+      .post(`${SERVER_URL}/done`, {
+        new_state: state,
+      })
+      .catch(({ response }) => {
+        if (response) {
+          const { data: message } = response;
+          messages.push(message);
+        } else {
+          messages.push("Server is down, trying to reconnect in 5 seconds");
+          retry_timeout_id = setTimeout(setupConnection, 5000);
+        }
+      });
   } catch (error) {
     res.status(500);
     throw error;

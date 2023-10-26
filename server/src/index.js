@@ -9,6 +9,8 @@ const { SERVER_PORT } = process.env;
 const CLIENT_QUEUE_SIZE = 100;
 const MIN_QUEUE_SIZE = 500;
 const REFILL_BATCH_SIZE = 1000;
+const MAX_MESSAGES = 4;
+const REQUEST_TIMEOUT_MS = CLIENT_QUEUE_SIZE * 10 + 5000;
 
 const status = {
   AVAILABLE: "Available",
@@ -18,7 +20,7 @@ const status = {
 
 const state = {
   is_running: false,
-  interval_id: null,
+  show_interval_id: null,
   clients: [
     {
       name: "",
@@ -35,7 +37,8 @@ const messages = [];
 const show = () => {
   const { clients, queue, done } = state;
 
-  if (messages.length >= 4) messages.shift();
+  if (messages.length >= MAX_MESSAGES)
+    messages.splice(0, messages.length - MAX_MESSAGES);
 
   console.clear();
   console.log(
@@ -58,6 +61,12 @@ const show = () => {
 };
 
 const switchIsRunning = () => (state.is_running = !state.is_running);
+
+const handleClientError = (client) => {
+  client.status = status.ERROR;
+  state.queue.push(...client.queue);
+  client.queue = [];
+};
 
 async function run() {
   try {
@@ -93,11 +102,17 @@ async function run() {
           .post(`${client.url}/run`, {
             new_state: client,
           })
+          .then(() => {
+            setTimeout(() => {
+              if (client.status === status.BUSY) {
+                messages.push(`Connection timed out for ${client.name}`);
+                handleClientError(client);
+              }
+            }, REQUEST_TIMEOUT_MS * 1000);
+          })
           .catch(({ code }) => {
-            messages.push(`Lost connection with ${client.name} [${code}]`);
-            client.status = status.ERROR;
-            queue.push(...client.queue);
-            client.queue = [];
+            messages.push(`Run request failed for ${client.name} [${code}]`);
+            handleClientError(client);
           });
       }
     }
@@ -137,6 +152,12 @@ server.post("/join", (req, res) => {
       state.clients.push(client);
     } else {
       client = state.clients[index];
+      if (client.status === status.BUSY)
+        return res
+          .status(200)
+          .send(
+            "Client is already busy, hit /done to send your results or /join to sign-in again"
+          );
       client.url = url;
       client.status = status.AVAILABLE;
       client.queue = [];
@@ -148,6 +169,7 @@ server.post("/join", (req, res) => {
     messages.push(`${client.name} joined`);
   } catch (error) {
     console.error("/join error: ", error);
+    // res.status(500).send("Server error");
   }
 });
 
@@ -157,6 +179,14 @@ server.post("/done", (req, res) => {
     const client = state.clients.find(
       (client) => client.name === new_state.name
     );
+
+    if (!client)
+      return res.status(500).send("Client is invalid, hit /join to sign-in");
+
+    if (client.status === status.ERROR)
+      return res
+        .status(500)
+        .send("Client is errored out, try hitting /join to sign-in again");
 
     state.done.push(...new_state.done);
     client.status = status.AVAILABLE;
@@ -173,7 +203,7 @@ server.listen(SERVER_PORT, async () => {
     // Initializes database with 4000 proteins
     // await initDatabase();
 
-    state.interval_id = setInterval(run, 50);
+    state.show_interval_id = setInterval(run, 1000);
   } catch (error) {
     console.error("server listen error: ", error);
   }
