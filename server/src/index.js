@@ -35,6 +35,8 @@ const messages = [];
 const show = () => {
   const { clients, queue, done } = state;
 
+  if (messages.length >= 4) messages.shift();
+
   console.clear();
   console.log(
     "---------------------------------\n" +
