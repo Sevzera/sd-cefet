@@ -119,7 +119,7 @@ async function run() {
 
     switchIsRunning();
   } catch (error) {
-    console.error("run error: ", error);
+    messages.push("run ERROR: ", error);
   }
 }
 
@@ -152,12 +152,10 @@ server.post("/join", (req, res) => {
       state.clients.push(client);
     } else {
       client = state.clients[index];
-      if (client.status === status.BUSY)
-        return res
-          .status(200)
-          .send(
-            "Client is already busy, hit /done to send your results or /join to sign-in again"
-          );
+      if (client.status === status.BUSY) {
+        handleClientError(client);
+        return messages.push(`${client.name} hit /join while busy`);
+      }
       client.url = url;
       client.status = status.AVAILABLE;
       client.queue = [];
@@ -168,8 +166,8 @@ server.post("/join", (req, res) => {
     });
     messages.push(`${client.name} joined`);
   } catch (error) {
-    console.error("/join error: ", error);
-    // res.status(500).send("Server error");
+    messages.push("/join ERROR: ", error);
+    res.status(500).send("Server error");
   }
 });
 
@@ -192,7 +190,7 @@ server.post("/done", (req, res) => {
     client.status = status.AVAILABLE;
     client.queue = [];
   } catch (error) {
-    console.error("/done error: ", error);
+    messages.error("/done ERROR: ", error);
   }
 });
 
@@ -205,6 +203,6 @@ server.listen(SERVER_PORT, async () => {
 
     state.show_interval_id = setInterval(run, 1000);
   } catch (error) {
-    console.error("server listen error: ", error);
+    console.error("server listen ERROR: ", error);
   }
 });

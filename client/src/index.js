@@ -69,15 +69,8 @@ const setupConnection = async () => {
         state.done = [];
         clearInterval(retry_timeout_id);
       })
-      .catch(({ response, code }) => {
-        // both are undefined for some reason ^
-        if (response) {
-          messages.push(
-            `Couldn't connect to server [${code}], trying again in 5 seconds`
-          );
-        } else {
-          messages.push("Server is down, trying again in 5 seconds");
-        }
+      .catch(() => {
+        messages.push(`Couldn't connect to server, trying again in 5 seconds`);
         retry_timeout_id = setTimeout(setupConnection, 5000);
       });
   } catch (error) {
@@ -91,7 +84,7 @@ client.listen(PORT, async () => {
     show_interval_id = setInterval(show, 1000);
     await setupConnection();
   } catch (error) {
-    console.error("client listen error: ", error);
+    messages.push("client listen ERROR: ", error);
   }
 });
 
