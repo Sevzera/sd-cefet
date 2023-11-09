@@ -135,10 +135,11 @@ async function initDatabase() {
 
 server.post("/join", (req, res) => {
   try {
-    const { host, port } = req.body;
+    const host = req.socket.remoteAddress;
+    const { port } = req.body;
     const url = `http://${host}:${port}`;
 
-    const name = req.socket.remoteAddress + ":" + port;
+    const name = host + ":" + port;
     const index = state.clients.findIndex((c) => c.name === name);
 
     let client = {};
