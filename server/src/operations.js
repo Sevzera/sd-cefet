@@ -1,4 +1,3 @@
-import fs from "fs";
 import utils from "./utils.js";
 import database from "./database.js";
 
@@ -140,15 +139,30 @@ operations.getPairs = async (size = 1, exceptions = []) => {
     const pairs = result.map((doc) => doc._id);
     return pairs;
   } catch (error) {
-    console.error("Error in operations.getPairsByMatch: ", error);
+    console.error("Error in operations.getPairs: ", error);
     throw error;
   }
 };
 
-operations.updatePairs = async (id1, id2, match) => {
+operations.getMaxIndex = async (ids) => {
   try {
+    const collection = await database.getCollection(-1);
+    const result = await collection.find({ _id: { $in: ids } }).toArray();
+    const indexes = result.map((doc) => doc.collection);
+    const max = Math.max(...indexes);
+    return max;
+  } catch (error) {
+    console.error("Error in operations.getMaxIndex: ", error);
+    throw error;
+  }
+};
+
+operations.updatePair = async (id1, id2, match) => {
+  try {
+    const max = await operations.getMaxIndex([id1, id2]);
     let result = null;
-    for (const collection of database.collections) {
+    for (let index = 0; index <= max; index++) {
+      const collection = await database.getCollection(index);
       const doc = await collection.findOneAndUpdate(
         {
           _id: {
@@ -157,7 +171,7 @@ operations.updatePairs = async (id1, id2, match) => {
         },
         {
           $set: {
-            match,
+            match: Number(match),
           },
         },
         {
@@ -171,7 +185,7 @@ operations.updatePairs = async (id1, id2, match) => {
     }
     return result;
   } catch (error) {
-    console.error("Error in operations.setPairMatch: ", error);
+    console.error("Error in operations.updatePair: ", error);
     throw error;
   }
 };
@@ -184,6 +198,33 @@ operations.updatePairs = async (pairs) => {
       const { _id, match } = pair;
       const [id1, id2] = utils._idToIds(_id);
       promises.push(operations.updatePair(id1, id2, match));
+    }
+
+    const result = await Promise.all(promises);
+    return result;
+  } catch (error) {
+    console.error("Error in operations.updatePairs: ", error);
+    throw error;
+  }
+};
+
+operations.resetPairs = async (pairs) => {
+  try {
+    const collCount = database.collections.length;
+    const promises = [];
+
+    for (let i = 0; i < collCount; i++) {
+      const collection = await database.getCollection(i);
+      promises.push(
+        collection.updateMany(
+          {},
+          {
+            $set: {
+              match: null,
+            },
+          }
+        )
+      );
     }
 
     const result = await Promise.all(promises);
