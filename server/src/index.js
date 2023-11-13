@@ -7,10 +7,11 @@ import utils from "./utils.js";
 const { SERVER_PORT } = process.env;
 
 const CLIENT_QUEUE_SIZE = 100;
+const DONE_THRESHOLD = 2000;
 const MIN_QUEUE_SIZE = 500;
 const REFILL_BATCH_SIZE = 1000;
 const MAX_MESSAGES = 4;
-const REQUEST_TIMEOUT_MS = CLIENT_QUEUE_SIZE * 10 + 5000;
+const REQUEST_TIMEOUT_SECONDS = CLIENT_QUEUE_SIZE * 10 + 5000;
 
 const status = {
   AVAILABLE: "Available",
@@ -60,8 +61,6 @@ const show = () => {
   );
 };
 
-const switchIsRunning = () => (state.is_running = !state.is_running);
-
 const handleClientError = (client) => {
   client.status = status.ERROR;
   state.queue.push(...client.queue);
@@ -70,13 +69,16 @@ const handleClientError = (client) => {
 
 async function run() {
   try {
-    const { clients, queue } = state;
-
     show();
 
     const { is_running } = state;
     if (is_running) return;
-    switchIsRunning();
+    state.is_running = !state.is_running;
+
+    const { clients, queue, done } = state;
+
+    // SAVE DATA
+    if (done.length > DONE_THRESHOLD) await operations.updatePairs(done);
 
     // REFILL QUEUE IF NEEDED
     if (queue.length < MIN_QUEUE_SIZE) {
@@ -84,10 +86,12 @@ async function run() {
         (accumulator, client) => [...accumulator, ...client.queue],
         []
       );
-      const pairs = await operations.getPairsByMatch(null, REFILL_BATCH_SIZE, [
+      const exceptions = [
         ...processing,
         ...queue,
-      ]);
+        ...done.map((pair) => pair._id),
+      ];
+      const pairs = await operations.getPairs(REFILL_BATCH_SIZE, exceptions);
       queue.push(...pairs);
     }
 
@@ -108,7 +112,7 @@ async function run() {
                 messages.push(`Connection timed out for ${client.name}`);
                 handleClientError(client);
               }
-            }, REQUEST_TIMEOUT_MS * 1000);
+            }, REQUEST_TIMEOUT_SECONDS * 1000);
           })
           .catch(({ code }) => {
             messages.push(`Run request failed for ${client.name} [${code}]`);
@@ -117,7 +121,7 @@ async function run() {
       }
     }
 
-    switchIsRunning();
+    state.is_running = !state.is_running;
   } catch (error) {
     messages.push("run ERROR: ", error);
   }
@@ -199,7 +203,7 @@ server.listen(SERVER_PORT, async () => {
   try {
     console.log(`Server is running on port ${SERVER_PORT}`);
 
-    // Initializes database with 4000 proteins
+    // Initializes database with 4000 proteins, this takes some time
     // await initDatabase();
 
     state.show_interval_id = setInterval(run, 1000);

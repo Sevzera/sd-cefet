@@ -21,4 +21,13 @@ utils.isUrlValid = (url) => {
   }
 };
 
+utils._idToIds = (_id) => {
+  try {
+    const ids = _id.split("-");
+    return ids;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export default utils;

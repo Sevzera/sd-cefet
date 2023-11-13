@@ -107,79 +107,7 @@ operations.getProteinIds = (start, end) => {
   }
 };
 
-operations.getPair = async (id1, id2) => {
-  try {
-    const index = await database.getCollection(-1);
-    const indexes = await index
-      .find({
-        _id: {
-          $in: [id1, id2],
-        },
-      })
-      .toArray();
-    const collIndexes = indexes.map((index) => index.collection);
-
-    let result = null;
-    for (const collIndex of collIndexes) {
-      const collection = await database.getCollection(collIndex);
-      const doc = await collection.findOne({
-        _id: {
-          $in: [`${id1}-${id2}`, `${id2}-${id1}`],
-        },
-      });
-      if (doc) {
-        result = doc;
-        break;
-      }
-    }
-    return result;
-  } catch (error) {
-    console.error("Error in operations.getPair: ", error);
-    throw error;
-  }
-};
-
-operations.getPairs = async (ids = [], size = 1) => {
-  try {
-    const index = await database.getCollection(-1);
-    const indexes = await index
-      .find({
-        _id: {
-          $in: ids,
-        },
-      })
-      .toArray();
-    const collIndexes = indexes.map((index) => index.collection);
-
-    let result = [];
-    for (const collIndex of collIndexes) {
-      const collection = await database.getCollection(collIndex);
-      const docs = await collection
-        .find(
-          {
-            _id: {
-              $regex: `(${ids.join("|")})`,
-            },
-          },
-          { $limit: size }
-        )
-        .toArray();
-      if (docs.length) {
-        result.push(...docs);
-      }
-    }
-    return result;
-  } catch (error) {
-    console.error("Error in operations.getPairs: ", error);
-    throw error;
-  }
-};
-
-operations.getPairsByMatch = async (
-  match = null,
-  size = 1,
-  exceptions = []
-) => {
+operations.getPairs = async (size = 1, exceptions = []) => {
   try {
     const collection = await database.getCollection(0);
     const collectionsToUnify = database.collections
@@ -197,13 +125,15 @@ operations.getPairsByMatch = async (
           _id: {
             $nin: exceptions,
           },
-          match: {
-            ...(match === null && { $eq: null }),
-            ...(typeof match === "number" && { $gte: match }),
-          },
+          match: null,
         },
       },
       { $limit: size },
+      {
+        $project: {
+          _id: 1,
+        },
+      },
     ];
     const result = await collection.aggregate(pipeline).toArray();
 
@@ -215,7 +145,7 @@ operations.getPairsByMatch = async (
   }
 };
 
-operations.setPairMatch = async (id1, id2, match) => {
+operations.updatePairs = async (id1, id2, match) => {
   try {
     let result = null;
     for (const collection of database.collections) {
@@ -242,6 +172,24 @@ operations.setPairMatch = async (id1, id2, match) => {
     return result;
   } catch (error) {
     console.error("Error in operations.setPairMatch: ", error);
+    throw error;
+  }
+};
+
+operations.updatePairs = async (pairs) => {
+  try {
+    const promises = [];
+
+    for (const pair of pairs) {
+      const { _id, match } = pair;
+      const [id1, id2] = utils._idToIds(_id);
+      promises.push(operations.updatePair(id1, id2, match));
+    }
+
+    const result = await Promise.all(promises);
+    return result;
+  } catch (error) {
+    console.error("Error in operations.setPairMatches: ", error);
     throw error;
   }
 };
