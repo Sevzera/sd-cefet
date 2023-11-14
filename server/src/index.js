@@ -4,13 +4,14 @@ import axios from "axios";
 import cors from "cors";
 import operations from "./operations.js";
 import utils from "./utils.js";
+import fs from "fs";
 const { SERVER_PORT } = process.env;
 
 const CLIENT_QUEUE_SIZE = 100;
 const DONE_MAX = 250;
 const LOCAL_QUEUE_MIN = 500;
 const REFILL_SIZE = 1000;
-const MESSAGES_MAX = 4;
+const MESSAGES_MAX = 10;
 const REQUEST_TIMEOUT = CLIENT_QUEUE_SIZE * 10 + 5000;
 
 const status = {
@@ -21,6 +22,7 @@ const status = {
 
 const state = {
   is_running: false,
+  is_locked: false,
   show_interval_id: null,
   clients: [
     {
@@ -37,8 +39,6 @@ const state = {
 
 const messages = [];
 const show = () => {
-  const { clients, queue, done } = state;
-
   if (messages.length >= MESSAGES_MAX)
     messages.splice(0, messages.length - MESSAGES_MAX);
 
@@ -46,15 +46,16 @@ const show = () => {
   console.log(
     "---------------------------------\n" +
       "STATE\n\n" +
-      `QUEUE: ${queue.length}\n` +
-      `DONE: ${done.length}\n` +
-      `CLIENTS AVAILABLE: ${clients
+      `QUEUE: ${state.queue.length}\n` +
+      `DONE: ${state.done.length}\n` +
+      `SAVING: ${state.saving.flat().length}\n` +
+      `CLIENTS AVAILABLE: ${state.clients
         .filter((client) => client.status === status.AVAILABLE)
         .map((client) => client.name)}\n` +
-      `CLIENTS BUSY: ${clients
+      `CLIENTS BUSY: ${state.clients
         .filter((client) => client.status === status.BUSY)
         .map((client) => client.name)}\n` +
-      `CLIENTS ERROR: ${clients
+      `CLIENTS ERROR: ${state.clients
         .filter((client) => client.status === status.ERROR)
         .map((client) => client.name)}\n` +
       "\n---------------------------------\n" +
@@ -63,9 +64,8 @@ const show = () => {
 };
 
 const handleClientError = (client) => {
-  const { queue } = state;
   client.status = status.ERROR;
-  queue.push(...client.queue);
+  state.queue.push(...client.queue);
   client.queue = [];
 };
 
@@ -73,45 +73,48 @@ async function run() {
   try {
     show();
 
-    const { is_running } = state;
-    if (is_running) return;
+    if (state.is_running) return;
     state.is_running = !state.is_running;
 
-    const { clients, queue, done } = state;
-
     // SAVE DATA
-    if (done.length >= DONE_MAX) {
-      state.saving = [...done];
+    if (state.done.length >= DONE_MAX) {
+      state.saving.push([...state.done]);
       state.done = [];
-      const { saving } = state;
-      operations.updatePairs(saving).then(() => {
-        messages.push(`Saved ${saving.length} pairs to database`);
-      });
+      if (!state.is_locked) {
+        state.is_locked = true;
+        const batch = state.saving.shift();
+        operations.updatePairs(batch).then(() => {
+          messages.push(`Saved ${batch.length} pairs to database`);
+          state.is_locked = false;
+        });
+      }
     }
 
     // REFILL QUEUE IF NEEDED
-    if (queue.length <= LOCAL_QUEUE_MIN) {
-      const processing = clients.reduce(
+    if (state.queue.length <= LOCAL_QUEUE_MIN && !state.is_locked) {
+      const processing = state.clients.reduce(
         (accumulator, client) => [...accumulator, ...client.queue],
         []
       );
       const exceptions = [
         ...processing,
-        ...queue,
-        ...done.map((pair) => pair._id),
-        ...saving.map((pair) => pair._id),
+        ...state.queue,
+        ...state.done.map((pair) => pair._id),
+        ...state.saving.map((pair) => pair._id),
       ];
-      const pairs = await operations.getPairs(REFILL_SIZE, exceptions);
-      queue.push(...pairs);
+      operations.getPairs(REFILL_SIZE, exceptions).then((pairs) => {
+        state.queue.push(...pairs);
+        state.is_locked = false;
+      });
     }
 
     // HANDLE CLIENTS
-    for (const client of clients) {
+    for (const client of state.clients) {
       if (client.status === status.ERROR) continue;
 
-      if (client.status === status.AVAILABLE && queue.length) {
+      if (client.status === status.AVAILABLE && state.queue.length) {
         client.status = status.BUSY;
-        client.queue = queue.splice(0, CLIENT_QUEUE_SIZE);
+        client.queue = state.queue.splice(0, CLIENT_QUEUE_SIZE);
         axios
           .post(`${client.url}/run`, {
             new_state: client,

@@ -128,7 +128,7 @@ operations.sleep = (s) => {
 operations.processPair = async (pair) => {
   try {
     const time = Number(Math.random() * 10).toFixed(2);
-    await operations.sleep(time);
+    await operations.sleep(0.1);
     const match = Number(Math.random() * 100).toFixed(2);
     state.done.push({
       _id: pair,
