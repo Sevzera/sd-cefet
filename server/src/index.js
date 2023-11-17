@@ -8,7 +8,7 @@ import fs from "fs";
 const { SERVER_PORT } = process.env;
 
 const CLIENT_QUEUE_SIZE = 100;
-const DONE_MAX = 250;
+const DONE_MAX = 1000;
 const LOCAL_QUEUE_MIN = 500;
 const REFILL_SIZE = 1000;
 const MESSAGES_MAX = 10;
@@ -100,7 +100,7 @@ async function run() {
         ...processing,
         ...state.queue,
         ...state.done.map((pair) => pair._id),
-        ...state.saving.map((pair) => pair._id),
+        ...state.saving.flat().map((pair) => pair._id),
       ];
       operations.getPairs(REFILL_SIZE, exceptions).then((pairs) => {
         state.queue.push(...pairs);

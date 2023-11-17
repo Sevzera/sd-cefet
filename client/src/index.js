@@ -6,6 +6,7 @@ const { CLIENT_HOST, CLIENT_PORT, SERVER_HOST, SERVER_PORT } = process.env;
 const SERVER_URL = `http://${SERVER_HOST}:${SERVER_PORT}`;
 
 const MAX_MESSAGES = 4;
+const MAX_PROCESSING_SECONDS = 10;
 
 const operations = {};
 
@@ -127,8 +128,8 @@ operations.sleep = (s) => {
 
 operations.processPair = async (pair) => {
   try {
-    const time = Number(Math.random() * 10).toFixed(2);
-    await operations.sleep(0.1);
+    const time = Number(Math.random() * MAX_PROCESSING_SECONDS).toFixed(2);
+    await operations.sleep(time);
     const match = Number(Math.random() * 100).toFixed(2);
     state.done.push({
       _id: pair,
