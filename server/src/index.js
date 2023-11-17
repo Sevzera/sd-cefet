@@ -48,7 +48,7 @@ const show = () => {
       "STATE\n\n" +
       `QUEUE: ${state.queue.length}\n` +
       `DONE: ${state.done.length}\n` +
-      `SAVING: ${state.saving.flat().length}\n` +
+      `SAVING: ${state.saving.length} batch(es)\n` +
       `CLIENTS AVAILABLE: ${state.clients
         .filter((client) => client.status === status.AVAILABLE)
         .map((client) => client.name)}\n` +
@@ -182,7 +182,8 @@ server.post("/join", (req, res) => {
     res.status(200).send({
       new_state: client,
     });
-    messages.push(`${client.name} joined`);
+    const message = `${client.name} joined`;
+    if (messages.at(-1) !== message) messages.push(message);
   } catch (error) {
     messages.push("/join ERROR: ", error);
     res.status(500).send("Server error");
