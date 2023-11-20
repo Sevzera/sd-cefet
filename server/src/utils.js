@@ -30,4 +30,19 @@ utils._idToIds = (_id) => {
   }
 };
 
+utils.getClientNameAndURL = (req) => {
+  try {
+    const host = req.socket.remoteAddress.split(":").pop();
+    const { port } = req.body;
+    const url = `http://${host}:${port}`;
+    const name = host + ":" + port;
+    return {
+      name,
+      url,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
 export default utils;

@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-const { CLIENT_HOST, CLIENT_PORT, SERVER_HOST, SERVER_PORT } = process.env;
+const { CLIENT_PORT, SERVER_HOST, SERVER_PORT } = process.env;
 const SERVER_URL = `http://${SERVER_HOST}:${SERVER_PORT}`;
 
 const MAX_MESSAGES = 4;
@@ -16,7 +16,6 @@ client.use(cors({ origin: "*" }));
 client.use(express.json());
 
 let retry_timeout_id = null;
-let show_interval_id = null;
 
 const state = {
   name: null,
@@ -35,10 +34,7 @@ async function show() {
     console.clear();
     console.log(
       "---------------------------------\n" +
-        "STATE\n\n" +
-        `NAME: ${state.name}\n` +
-        `URL: ${state.url}\n` +
-        `STATUS: ${state.status}\n` +
+        "STATE\n" +
         `\nQUEUE: ${state.queue.length - state.done.length}\n` +
         `DONE: ${state.done.length}\n` +
         "\n---------------------------------\n" +
@@ -57,15 +53,11 @@ const setupConnection = async () => {
     messages.push("Trying to connect to server...");
     await axios
       .post(`${SERVER_URL}/join`, {
-        host: CLIENT_HOST,
         port: PORT,
       })
       .then(({ data }) => {
         messages.push("Connected to server");
-        const { name, url, status, queue } = data.new_state;
-        state.name = name;
-        state.url = url;
-        state.status = status;
+        const { queue } = data;
         state.queue = queue;
         state.done = [];
         clearInterval(retry_timeout_id);
@@ -82,7 +74,7 @@ const setupConnection = async () => {
 client.listen(PORT, async () => {
   try {
     messages.push(`Client is listening on port ${PORT}`);
-    show_interval_id = setInterval(show, 1000);
+    setInterval(show, 1000);
     await setupConnection();
   } catch (error) {
     messages.push("client listen ERROR: ", error);
@@ -91,9 +83,7 @@ client.listen(PORT, async () => {
 
 client.post("/run", async (req, res) => {
   try {
-    const { body } = req;
-    const { status, queue } = body.new_state;
-    state.status = status;
+    const { queue } = req.body;
     state.queue = queue;
     state.done = [];
     res.status(200).send("Processing...");
@@ -101,7 +91,8 @@ client.post("/run", async (req, res) => {
     await operations.process();
     await axios
       .post(`${SERVER_URL}/done`, {
-        new_state: state,
+        done: state.done,
+        port: PORT,
       })
       .catch(({ response }) => {
         if (response) {

@@ -4,7 +4,6 @@ import axios from "axios";
 import cors from "cors";
 import operations from "./operations.js";
 import utils from "./utils.js";
-import fs from "fs";
 const { SERVER_PORT } = process.env;
 
 const CLIENT_QUEUE_SIZE = 100;
@@ -117,7 +116,7 @@ async function run() {
         client.queue = state.queue.splice(0, CLIENT_QUEUE_SIZE);
         axios
           .post(`${client.url}/run`, {
-            new_state: client,
+            queue: client.queue,
           })
           .then(() => {
             setTimeout(() => {
@@ -152,12 +151,8 @@ async function initDatabase() {
 
 server.post("/join", (req, res) => {
   try {
-    const host = req.socket.remoteAddress.split(":").pop();
-    const { port } = req.body;
-    const url = `http://${host}:${port}`;
-    const { clients } = state;
-    const name = host + ":" + port;
-    const index = clients.findIndex((c) => c.name === name);
+    const { name, url } = utils.getClientNameAndURL(req);
+    const index = state.clients.findIndex((c) => c.name === name);
 
     let client = {};
     if (index === -1) {
@@ -167,9 +162,9 @@ server.post("/join", (req, res) => {
         status: status.AVAILABLE,
         queue: [],
       };
-      clients.push(client);
+      state.clients.push(client);
     } else {
-      client = clients[index];
+      client = state.clients[index];
       if (client.status === status.BUSY) {
         handleClientError(client);
         return messages.push(`${client.name} hit /join while busy`);
@@ -179,9 +174,7 @@ server.post("/join", (req, res) => {
       client.queue = [];
     }
 
-    res.status(200).send({
-      new_state: client,
-    });
+    res.status(200).end();
     const message = `${client.name} joined`;
     if (messages.at(-1) !== message) messages.push(message);
   } catch (error) {
@@ -192,9 +185,9 @@ server.post("/join", (req, res) => {
 
 server.post("/done", (req, res) => {
   try {
-    const { new_state } = req.body;
-    const { clients } = state;
-    const client = clients.find((client) => client.name === new_state.name);
+    const { name } = utils.getClientNameAndURL(req);
+    const { done } = req.body;
+    const client = state.clients.find((client) => client.name === name);
 
     if (!client)
       return res.status(500).send("Client is invalid, hit /join to sign-in");
@@ -204,12 +197,11 @@ server.post("/done", (req, res) => {
         .status(500)
         .send("Client is errored out, try hitting /join to sign-in again");
 
-    const { done } = state;
-    done.push(...new_state.done);
+    state.done.push(...done);
     client.status = status.AVAILABLE;
     client.queue = [];
   } catch (error) {
-    messages.error("/done ERROR: ", error);
+    messages.push("/done ERROR: ", error);
   }
 });
 
