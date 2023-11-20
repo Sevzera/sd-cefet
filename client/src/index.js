@@ -18,9 +18,6 @@ client.use(express.json());
 let retry_timeout_id = null;
 
 const state = {
-  name: null,
-  url: null,
-  status: null,
   queue: [],
   done: [],
 };
@@ -58,6 +55,8 @@ const setupConnection = async () => {
       .then(() => {
         const message = "Connected to server";
         if (messages.at(-1) !== message) messages.push(message);
+        state.queue = [];
+        state.done = [];
         clearInterval(retry_timeout_id);
       })
       .catch(() => {

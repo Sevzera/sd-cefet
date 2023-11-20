@@ -11,7 +11,7 @@ const DONE_MAX = 1000;
 const LOCAL_QUEUE_MIN = 5000;
 const REFILL_SIZE = 1000;
 const MESSAGES_MAX = 10;
-const REQUEST_TIMEOUT = CLIENT_QUEUE_SIZE * 10 + 5000;
+const REQUEST_TIMEOUT_SECONDS = 20;
 
 const status = {
   AVAILABLE: "Available",
@@ -124,7 +124,7 @@ async function run() {
                 messages.push(`Connection timed out for ${client.name}`);
                 handleClientError(client);
               }
-            }, REQUEST_TIMEOUT * 1000);
+            }, REQUEST_TIMEOUT_SECONDS * 1000);
           })
           .catch(({ code }) => {
             messages.push(`/run request failed for ${client.name} [${code}]`);
