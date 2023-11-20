@@ -79,14 +79,14 @@ async function run() {
     if (state.done.length >= DONE_MAX) {
       state.saving.push([...state.done]);
       state.done = [];
-      if (!state.is_locked) {
-        state.is_locked = true;
-        const batch = state.saving.shift();
-        operations.updatePairs(batch).then(() => {
-          messages.push(`Saved ${batch.length} pairs to database`);
-          state.is_locked = false;
-        });
-      }
+    }
+    if (state.saving.length && !state.is_locked) {
+      state.is_locked = true;
+      const batch = state.saving.shift();
+      operations.updatePairs(batch).then(() => {
+        messages.push(`Saved ${batch.length} pairs to database`);
+        state.is_locked = false;
+      });
     }
 
     // REFILL QUEUE IF NEEDED
