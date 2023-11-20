@@ -8,7 +8,7 @@ const { SERVER_PORT } = process.env;
 
 const CLIENT_QUEUE_SIZE = 100;
 const DONE_MAX = 1000;
-const LOCAL_QUEUE_MIN = 500;
+const LOCAL_QUEUE_MIN = 5000;
 const REFILL_SIZE = 1000;
 const MESSAGES_MAX = 10;
 const REQUEST_TIMEOUT = CLIENT_QUEUE_SIZE * 10 + 5000;
@@ -82,15 +82,16 @@ async function run() {
     }
     if (state.saving.length && !state.is_locked) {
       state.is_locked = true;
-      const batch = state.saving.shift();
+      const batch = state.saving.at(0);
       operations.updatePairs(batch).then(() => {
         messages.push(`Saved ${batch.length} pairs to database`);
+        state.saving.shift();
         state.is_locked = false;
       });
     }
 
     // REFILL QUEUE IF NEEDED
-    if (state.queue.length <= LOCAL_QUEUE_MIN && !state.is_locked) {
+    if (state.queue.length <= LOCAL_QUEUE_MIN) {
       const processing = state.clients.reduce(
         (accumulator, client) => [...accumulator, ...client.queue],
         []
@@ -103,7 +104,6 @@ async function run() {
       ];
       operations.getPairs(REFILL_SIZE, exceptions).then((pairs) => {
         state.queue.push(...pairs);
-        state.is_locked = false;
       });
     }
 
