@@ -4,9 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "nodemon ./src/index.js",
     "dev-0": "nodemon ./src/index.js 0",
     "dev-1": "nodemon ./src/index.js 1",
     "dev-2": "nodemon ./src/index.js 2",
+    "static": "node ./src/index.js",
     "static-0": "node ./src/index.js 0",
     "static-1": "node ./src/index.js 1",
     "static-2": "node ./src/index.js 2"
