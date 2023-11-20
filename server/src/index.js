@@ -58,7 +58,7 @@ const show = () => {
         .filter((client) => client.status === status.ERROR)
         .map((client) => client.name)}\n` +
       "\n---------------------------------\n" +
-      messages.map((message) => message + "\n").join("")
+      messages.join("\n")
   );
 };
 
@@ -127,7 +127,7 @@ async function run() {
             }, REQUEST_TIMEOUT * 1000);
           })
           .catch(({ code }) => {
-            messages.push(`Run request failed for ${client.name} [${code}]`);
+            messages.push(`/run request failed for ${client.name} [${code}]`);
             handleClientError(client);
           });
       }
@@ -167,7 +167,10 @@ server.post("/join", (req, res) => {
       client = state.clients[index];
       if (client.status === status.BUSY) {
         handleClientError(client);
-        return messages.push(`${client.name} hit /join while busy`);
+        messages.push(`${client.name} hit /join while busy`);
+        return res
+          .status(500)
+          .send("Client was already busy and is now errored out, try hitting /join to sign-in again");
       }
       client.url = url;
       client.status = status.AVAILABLE;

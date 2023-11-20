@@ -38,7 +38,7 @@ async function show() {
         `\nQUEUE: ${state.queue.length - state.done.length}\n` +
         `DONE: ${state.done.length}\n` +
         "\n---------------------------------\n" +
-        messages.map((message) => message + "\n").join("")
+        messages.join("\n")
     );
   } catch (error) {
     throw error;
@@ -56,11 +56,12 @@ const setupConnection = async () => {
         port: PORT,
       })
       .then(() => {
-        messages.push("Connected to server");
+        const message = "Connected to server";
+        if (messages.at(-1) !== message) messages.push(message);
         clearInterval(retry_timeout_id);
       })
       .catch(() => {
-        messages.push(`Couldn't connect to server, trying again in 5 seconds`);
+        messages.push("Couldn't connect to server, trying again in 5 seconds");
         retry_timeout_id = setTimeout(setupConnection, 5000);
       });
   } catch (error) {
