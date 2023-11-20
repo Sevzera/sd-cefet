@@ -55,11 +55,8 @@ const setupConnection = async () => {
       .post(`${SERVER_URL}/join`, {
         port: PORT,
       })
-      .then(({ data }) => {
+      .then(() => {
         messages.push("Connected to server");
-        const { queue } = data;
-        state.queue = queue;
-        state.done = [];
         clearInterval(retry_timeout_id);
       })
       .catch(() => {
