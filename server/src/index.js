@@ -29,6 +29,7 @@ const state = {
       url: "",
       status: "",
       queue: [],
+      timeout_id: null,
     },
   ],
   queue: [],
@@ -104,7 +105,7 @@ async function run() {
             queue: client.queue,
           })
           .then(() => {
-            setTimeout(() => {
+            client.timeout_id = setTimeout(() => {
               if (client.status === status.BUSY) {
                 messages.push(`Connection timed out for ${client.name}`);
                 handleClientError(client);
@@ -161,6 +162,7 @@ server.post("/join", (req, res) => {
         url,
         status: status.AVAILABLE,
         queue: [],
+        timeout_id: null,
       };
       state.clients.push(client);
     } else {
@@ -170,11 +172,15 @@ server.post("/join", (req, res) => {
         messages.push(`${client.name} hit /join while busy`);
         return res
           .status(500)
-          .send("Client was already busy and is now errored out, try hitting /join to sign-in again");
+          .send(
+            "Client was already busy and is now errored out, try hitting /join to sign-in again"
+          );
       }
       client.url = url;
       client.status = status.AVAILABLE;
       client.queue = [];
+      if (client.timeout_id) clearTimeout(client.timeout_id);
+      client.timeout_id = null;
     }
 
     res.status(200).end();
@@ -203,6 +209,8 @@ server.post("/done", (req, res) => {
     state.done.push(...done);
     client.status = status.AVAILABLE;
     client.queue = [];
+    clearTimeout(client.timeout_id);
+    client.timeout_id = null;
   } catch (error) {
     messages.push("/done ERROR: ", error);
   }
