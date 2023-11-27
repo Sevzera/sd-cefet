@@ -75,21 +75,6 @@ async function run() {
     if (state.is_running) return;
     state.is_running = !state.is_running;
 
-    // SAVE DATA
-    if (state.done.length >= DONE_MAX) {
-      state.saving.push([...state.done]);
-      state.done = [];
-    }
-    if (state.saving.length && !state.is_locked) {
-      state.is_locked = true;
-      const batch = state.saving.at(0);
-      operations.updatePairs(batch).then(() => {
-        messages.push(`Saved ${batch.length} pairs to database`);
-        state.saving.shift();
-        state.is_locked = false;
-      });
-    }
-
     // REFILL QUEUE IF NEEDED
     if (state.queue.length <= LOCAL_QUEUE_MIN) {
       const processing = state.clients.reduce(
@@ -131,6 +116,21 @@ async function run() {
             handleClientError(client);
           });
       }
+    }
+
+    // SAVE DATA
+    if (state.done.length >= DONE_MAX) {
+      state.saving.push([...state.done]);
+      state.done = [];
+    }
+    if (state.saving.length && !state.is_locked) {
+      state.is_locked = true;
+      const batch = state.saving.at(0);
+      operations.updatePairs(batch).then(() => {
+        messages.push(`Saved ${batch.length} pairs to database`);
+        state.saving.shift();
+        state.is_locked = false;
+      });
     }
 
     state.is_running = !state.is_running;
